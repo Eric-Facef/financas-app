@@ -49,14 +49,18 @@ public class TransferService {
         Account to = accounts.findByIdAndUserId(req.toAccountId(), userId)
                 .orElseThrow(() -> new NotFoundException("Conta de destino não encontrada"));
 
+        LocalDate today = LocalDate.now(ZONE);
+        LocalDate date = req.occurredOn() != null ? req.occurredOn() : today;
+
+        // Saldo considerado até a data da transferência (ou hoje, se a data for passada)
+        LocalDate asOf = date.isAfter(today) ? date : today;
         BigDecimal balance = BalanceCalculator.balance(from.getInitialBalance(),
-                transactions.totalsForAccount(from.getId()));
+                transactions.totalsForAccount(from.getId(), asOf));
         if (balance.compareTo(req.amount()) < 0) {
             throw new BusinessException("Saldo insuficiente na conta de origem");
         }
 
         UUID transferId = UUID.randomUUID();
-        LocalDate date = req.occurredOn() != null ? req.occurredOn() : LocalDate.now(ZONE);
         BigDecimal amount = req.amount().setScale(2);
         boolean hasDescription = req.description() != null && !req.description().isBlank();
 

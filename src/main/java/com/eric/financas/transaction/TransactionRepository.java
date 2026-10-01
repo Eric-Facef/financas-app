@@ -25,6 +25,8 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID>,
 
     boolean existsByCategoryId(UUID categoryId);
 
+    boolean existsByAccountId(UUID accountId);
+
     /** Evita N+1 ao montar a listagem (conta e categoria vêm no mesmo SELECT). */
     @Override
     @EntityGraph(attributePaths = {"account", "category"})
@@ -33,18 +35,18 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID>,
     @Query("""
             select t.account.id as accountId, t.type as entryType, sum(t.amount) as total
             from Transaction t
-            where t.userId = :userId and t.deletedAt is null
+            where t.userId = :userId and t.deletedAt is null and t.occurredOn <= :asOf
             group by t.account.id, t.type
             """)
-    List<AccountTypeTotal> totalsByAccount(@Param("userId") UUID userId);
+    List<AccountTypeTotal> totalsByAccount(@Param("userId") UUID userId, @Param("asOf") LocalDate asOf);
 
     @Query("""
             select t.account.id as accountId, t.type as entryType, sum(t.amount) as total
             from Transaction t
-            where t.account.id = :accountId and t.deletedAt is null
+            where t.account.id = :accountId and t.deletedAt is null and t.occurredOn <= :asOf
             group by t.account.id, t.type
             """)
-    List<AccountTypeTotal> totalsForAccount(@Param("accountId") UUID accountId);
+    List<AccountTypeTotal> totalsForAccount(@Param("accountId") UUID accountId, @Param("asOf") LocalDate asOf);
 
     @Query("""
             select sum(t.amount) from Transaction t

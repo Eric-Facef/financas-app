@@ -10,6 +10,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
 
 import java.math.BigDecimal;
@@ -29,6 +30,7 @@ public class Account {
     @Column(name = "user_id", nullable = false)
     private UUID userId;
 
+    @Setter
     @Column(nullable = false, length = 80)
     private String name;
 
@@ -36,6 +38,7 @@ public class Account {
     @Column(nullable = false, length = 20)
     private AccountType type;
 
+    @Setter
     @Column(name = "initial_balance", nullable = false, precision = 19, scale = 2)
     private BigDecimal initialBalance;
 

@@ -36,10 +36,10 @@ Cada feature segue: `Controller -> Service -> Repository -> Entity`, com DTOs (`
 |---|---|---|
 | POST | /auth/register, /auth/login | Cria conta / entra. Retorna access token; refresh vai em cookie |
 | POST | /auth/refresh, /auth/logout | Renova (rotaciona) / encerra sessão |
-| GET, POST | /accounts | Lista com saldo / cria conta |
+| GET, POST, PUT, DELETE | /accounts | Lista com saldo / cria / renomeia e ajusta saldo inicial / exclui (só sem lançamentos) |
 | GET, POST, PUT, DELETE | /categories | CRUD de categorias (`?kind=EXPENSE`) |
 | GET, POST, PUT, DELETE | /transactions | `?month=2026-09&type=&categoryId=&accountId=&page=&size=` |
-| POST | /transfers | Transfere entre contas (ex.: corrente -> poupança) |
+| POST | /transfers | Transfere entre quaisquer contas (corrente -> poupança e poupança -> corrente), com data |
 | GET | /dashboard?month=2026-09 | Saldos, receitas, despesas, sobra e % por categoria |
 | GET | /audit?page=&size= | Histórico de ações do usuário |
 
@@ -95,3 +95,14 @@ Arquivos: `index.html`, `app.js`, `service-worker.js`, `manifest.webmanifest`, `
 
 O `app.js` detecta a porta 5500/5501/5173 e chama a API em `http://localhost:8080`. O CORS do perfil dev já libera essas origens.
 Como `localhost:5500` e `localhost:8080` são o mesmo *site*, o cookie de refresh (`SameSite=Lax`) funciona normalmente.
+
+### Variáveis em arquivo `.env`
+
+Na raiz do projeto, o arquivo `.env` (já no `.gitignore`) é lido automaticamente pelo Spring
+(`spring.config.import`). Variáveis reais do sistema (`export`, painel do Render) têm prioridade sobre ele.
+
+## Regras de saldo e datas
+
+- O lançamento aceita qualquer data (passada ou futura) em `occurredOn`.
+- O **saldo de cada conta é o de hoje**: lançamentos com data futura aparecem como "(agendado)" e só entram no saldo quando a data chega.
+- A **sobra do mês** é receitas - despesas do mês. O valor guardado na poupança no mês é líquido (guardado - devolvido) e nunca fica negativo.

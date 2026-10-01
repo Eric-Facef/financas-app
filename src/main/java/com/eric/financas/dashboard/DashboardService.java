@@ -37,8 +37,12 @@ public class DashboardService {
 
         BigDecimal income = orZero(transactions.sumByType(userId, TransactionType.INCOME, start, end));
         BigDecimal expenses = orZero(transactions.sumByType(userId, TransactionType.EXPENSE, start, end));
-        BigDecimal allocated = orZero(transactions.sumByTypeAndAccountType(
+        BigDecimal savingsIn = orZero(transactions.sumByTypeAndAccountType(
                 userId, TransactionType.TRANSFER_IN, AccountType.SAVINGS, start, end));
+        BigDecimal savingsOut = orZero(transactions.sumByTypeAndAccountType(
+                userId, TransactionType.TRANSFER_OUT, AccountType.SAVINGS, start, end));
+        // guardado líquido no mês (resgates diminuem; nunca fica negativo)
+        BigDecimal allocated = savingsIn.subtract(savingsOut).max(BigDecimal.ZERO);
 
         BigDecimal leftover = income.subtract(expenses);
 

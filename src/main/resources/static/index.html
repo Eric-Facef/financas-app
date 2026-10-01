@@ -12,13 +12,18 @@
   <style>
     body{background:#0b132b;color:#f1f5f9;font-family:system-ui,-apple-system,sans-serif}
     .card{background:rgba(28,37,65,.7);border:1px solid rgba(255,255,255,.08);border-radius:1rem;padding:1rem}
-    .in{width:100%;background:#0f172a;border:1px solid #334155;border-radius:.5rem;padding:.55rem .75rem;font-size:.875rem}
+    .in{width:100%;background:#0f172a;border:1px solid #334155;border-radius:.5rem;padding:.55rem .75rem;font-size:.875rem;color:#f1f5f9}
     .in:focus{outline:none;border-color:#22d3ee}
     .btn{width:100%;border-radius:.5rem;padding:.65rem;font-weight:600;font-size:.875rem;background:#0891b2}
     .btn:hover{background:#06b6d4}
+    .btn-p{background:#7c3aed}.btn-p:hover{background:#8b5cf6}
+    .btn-g{background:#059669}.btn-g:hover{background:#10b981}
+    .chip{font-size:.75rem;border:1px solid #334155;border-radius:9999px;padding:.25rem .75rem;color:#cbd5e1}
+    .chip:hover{border-color:#22d3ee;color:#22d3ee}
     .lbl{display:block;font-size:.75rem;color:#94a3b8;margin-bottom:.25rem}
-    .tab{padding-bottom:.5rem;border-bottom:2px solid transparent;color:#94a3b8}
+    .tab{padding-bottom:.5rem;border-bottom:2px solid transparent;color:#94a3b8;white-space:nowrap}
     .tab.on{border-color:#22d3ee;color:#22d3ee;font-weight:600}
+    input[type=date]{color-scheme:dark}
   </style>
 </head>
 <body class="min-h-screen">
@@ -46,14 +51,18 @@
       </div>
     </header>
 
-    <nav class="flex gap-4 text-sm border-b border-slate-800">
+    <nav class="flex gap-4 text-sm border-b border-slate-800 overflow-x-auto">
       <button class="tab on" data-tab="dash">Dashboard</button>
-      <button class="tab" data-tab="sobra">Sobra do mês</button>
+      <button class="tab" data-tab="poup">Poupança</button>
+      <button class="tab" data-tab="contas">Contas</button>
       <button class="tab" data-tab="audit">Auditoria</button>
     </nav>
 
+    <!-- DASHBOARD -->
     <section id="t-dash" class="space-y-5">
-      <div id="accounts" class="grid grid-cols-1 sm:grid-cols-3 gap-3"></div>
+      <div id="summary" class="grid grid-cols-1 sm:grid-cols-2 gap-3"></div>
+      <div id="accGroups" class="space-y-5"></div>
+
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <form id="txForm" class="card space-y-3">
           <h2 class="font-semibold">Novo lançamento</h2>
@@ -67,6 +76,7 @@
             <div><label class="lbl">Categoria</label><select id="txCat" class="in"></select></div>
             <div><label class="lbl">Conta</label><select id="txAcc" class="in"></select></div>
           </div>
+          <div><label class="lbl">Data do lançamento (pode ser passada ou futura)</label><input id="txDate" type="date" required class="in"></div>
           <button class="btn">Salvar lançamento</button>
         </form>
         <div class="card">
@@ -75,25 +85,82 @@
           <p id="chartEmpty" class="hidden text-center text-sm text-slate-500 pt-20">Sem despesas neste mês.</p>
         </div>
       </div>
+
       <div class="card">
         <h2 class="font-semibold mb-3">Lançamentos do mês</h2>
         <div id="txList" class="space-y-2 max-h-96 overflow-y-auto"></div>
       </div>
     </section>
 
-    <section id="t-sobra" class="hidden">
-      <form id="trForm" class="card space-y-4 max-w-lg">
-        <h2 class="font-semibold">Alocar sobra na poupança</h2>
-        <div class="flex justify-between items-center bg-slate-900/60 rounded-xl p-3">
-          <div><p class="text-xs text-slate-400">Sobra disponível no mês</p><p id="leftover" class="text-2xl font-bold text-purple-400"></p></div>
-          <button type="button" id="allocAll" class="text-xs text-purple-300 border border-purple-500/40 rounded-lg px-3 py-1.5">Alocar 100%</button>
+    <!-- POUPANÇA -->
+    <section id="t-poup" class="hidden space-y-5">
+      <div id="savCards" class="grid grid-cols-1 sm:grid-cols-3 gap-3"></div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <form id="gForm" class="card space-y-3">
+          <h2 class="font-semibold">Guardar na poupança</h2>
+          <div class="flex justify-between items-center bg-slate-900/60 rounded-xl p-3">
+            <div><p class="text-xs text-slate-400">Sobra disponível no mês</p><p id="leftover" class="text-xl font-bold text-purple-400"></p></div>
+            <button type="button" id="gAll" class="chip">Usar a sobra</button>
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div><label class="lbl">Sai da conta</label><select id="gFrom" class="in"></select></div>
+            <div><label class="lbl">Vai para</label><select id="gTo" class="in"></select></div>
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div><label class="lbl">Valor (R$)</label><input id="gAmount" type="number" step="0.01" min="0.01" required class="in"></div>
+            <div><label class="lbl">Data</label><input id="gDate" type="date" required class="in"></div>
+          </div>
+          <div><label class="lbl">Meta / descrição</label><input id="gDesc" maxlength="160" value="Reserva de emergência" class="in"></div>
+          <button class="btn btn-p">Guardar</button>
+        </form>
+
+        <form id="rForm" class="card space-y-3">
+          <h2 class="font-semibold">Devolver para a conta corrente</h2>
+          <div class="flex justify-between items-center bg-slate-900/60 rounded-xl p-3">
+            <div><p class="text-xs text-slate-400">Saldo da poupança selecionada</p><p id="rBalance" class="text-xl font-bold text-emerald-400"></p></div>
+            <button type="button" id="rAll" class="chip">Devolver tudo</button>
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div><label class="lbl">Sai da poupança</label><select id="rFrom" class="in"></select></div>
+            <div><label class="lbl">Vai para</label><select id="rTo" class="in"></select></div>
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div><label class="lbl">Valor (R$)</label><input id="rAmount" type="number" step="0.01" min="0.01" required class="in"></div>
+            <div><label class="lbl">Data</label><input id="rDate" type="date" required class="in"></div>
+          </div>
+          <div><label class="lbl">Descrição</label><input id="rDesc" maxlength="160" value="Resgate da poupança" class="in"></div>
+          <button class="btn btn-g">Devolver</button>
+        </form>
+      </div>
+    </section>
+
+    <!-- CONTAS -->
+    <section id="t-contas" class="hidden grid grid-cols-1 lg:grid-cols-2 gap-5">
+      <div class="card space-y-3">
+        <h2 class="font-semibold">Minhas contas</h2>
+        <div id="accList" class="space-y-2"></div>
+      </div>
+      <form id="accForm" class="card space-y-3 self-start">
+        <h2 class="font-semibold" id="accFormTitle">Adicionar conta</h2>
+        <div id="presets" class="flex flex-wrap gap-2">
+          <button type="button" class="chip" data-preset="santander">Santander</button>
+          <button type="button" class="chip" data-preset="nubank">Nubank</button>
+          <button type="button" class="chip" data-preset="bb">Banco do Brasil</button>
+          <button type="button" class="chip" data-preset="bbp">Poupança BB</button>
         </div>
-        <div><label class="lbl">Valor (R$)</label><input id="trAmount" type="number" step="0.01" min="0.01" required class="in"></div>
-        <div><label class="lbl">Meta / descrição</label><input id="trDesc" maxlength="160" value="Reserva de emergência" class="in"></div>
-        <button class="btn">Confirmar transferência</button>
+        <div><label class="lbl">Nome da conta</label><input id="accName" required maxlength="80" class="in" placeholder="Ex.: Santander"></div>
+        <div class="grid grid-cols-2 gap-3">
+          <div><label class="lbl">Tipo</label>
+            <select id="accType" class="in"><option value="CHECKING">Conta corrente</option><option value="SAVINGS">Poupança</option></select></div>
+          <div><label class="lbl">Saldo atual (R$)</label><input id="accInitial" type="number" step="0.01" class="in" placeholder="0,00"></div>
+        </div>
+        <button class="btn" id="accSubmit">Adicionar conta</button>
+        <button type="button" id="accCancel" class="hidden w-full text-xs text-slate-400">Cancelar edição</button>
       </form>
     </section>
 
+    <!-- AUDITORIA -->
     <section id="t-audit" class="hidden card overflow-x-auto">
       <table class="w-full text-xs text-left">
         <thead class="text-slate-400 uppercase"><tr><th class="p-2">Data/hora</th><th class="p-2">Ação</th><th class="p-2">Entidade</th><th class="p-2">Detalhes</th></tr></thead>
