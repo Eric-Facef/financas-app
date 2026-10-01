@@ -1,0 +1,5 @@
+{
+  "liveServer.settings.root": "/src/main/resources/static",
+  "liveServer.settings.port": 5500,
+  "liveServer.settings.host": "localhost"
+}

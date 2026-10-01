@@ -1,0 +1,60 @@
+spring:
+  application:
+    name: financas-api
+  profiles:
+    default: dev
+  autoconfigure:
+    # Autenticamos via JWT; evita a senha aleatória padrão do Spring Security
+    exclude: org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/financas}
+    username: ${DB_USER:financas}
+    password: ${DB_PASSWORD:financas}
+    hikari:
+      maximum-pool-size: ${DB_POOL_SIZE:5}
+      minimum-idle: 0
+      idle-timeout: 120000
+      max-lifetime: 600000
+      connection-timeout: 30000   # tolera o cold start do Neon
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+  flyway:
+    enabled: true
+    # No Neon, rode migrations pela conexão direta (sem pooler)
+    url: ${FLYWAY_URL:${DATABASE_URL:jdbc:postgresql://localhost:5432/financas}}
+    user: ${DB_USER:financas}
+    password: ${DB_PASSWORD:financas}
+  jackson:
+    default-property-inclusion: non_null
+
+server:
+  port: ${PORT:8080}
+  forward-headers-strategy: framework
+  error:
+    include-message: never
+    include-stacktrace: never
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+
+app:
+  security:
+    jwt-secret: ${JWT_SECRET}
+    access-token-ttl: 15m
+    refresh-token-ttl: 14d
+    cookie-secure: ${COOKIE_SECURE:false}
+    cookie-same-site: ${COOKIE_SAMESITE:Lax}
+    allowed-origins: ${ALLOWED_ORIGINS:http://localhost:5173,http://localhost:8080}
+    bcrypt-strength: ${BCRYPT_STRENGTH:10}
