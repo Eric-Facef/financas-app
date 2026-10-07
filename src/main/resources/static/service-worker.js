@@ -1,5 +1,5 @@
 // Shell offline: rede primeiro, cache como fallback. A API (/api) nunca é cacheada.
-const CACHE = 'financas-v1';
+const CACHE = 'financas-v2';
 const SHELL = ['/', '/app.js', '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png'];
 
 self.addEventListener('install', (e) => {

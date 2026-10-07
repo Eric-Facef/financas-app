@@ -314,9 +314,105 @@ $('accForm').onsubmit = async (e) => {
 
 function setTab(name) {
   document.querySelectorAll('.tab').forEach((b) => b.classList.toggle('on', b.dataset.tab === name));
-  ['dash', 'poup', 'contas', 'audit'].forEach((t) => $(`t-${t}`).classList.toggle('hidden', t !== name));
+  ['dash', 'poup', 'contas', 'seg', 'audit'].forEach((t) => $(`t-${t}`).classList.toggle('hidden', t !== name));
+  if (name === 'seg') loadPasskeys();
 }
 document.querySelectorAll('.tab').forEach((b) => (b.onclick = () => setTab(b.dataset.tab)));
+
+// ---------------------------------------------------------------- login por digital (passkeys / WebAuthn)
+// O servidor manda/recebe binários em base64url; o navegador usa ArrayBuffer. Estas funções convertem.
+const b64 = {
+  enc: (buf) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''),
+  dec: (s) => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0)).buffer,
+};
+const passkeysSupported = () => !!(window.PublicKeyCredential && navigator.credentials);
+
+const creationOptions = (pk) => ({
+  ...pk,
+  challenge: b64.dec(pk.challenge),
+  user: { ...pk.user, id: b64.dec(pk.user.id) },
+  excludeCredentials: (pk.excludeCredentials || []).map((c) => ({ ...c, id: b64.dec(c.id) })),
+});
+const requestOptions = (pk) => ({
+  ...pk,
+  challenge: b64.dec(pk.challenge),
+  allowCredentials: (pk.allowCredentials || []).map((c) => ({ ...c, id: b64.dec(c.id) })),
+});
+// Mesmo formato que a biblioteca da Yubico espera (igual ao do "webauthn-json")
+const attestationJson = (c) => ({
+  type: c.type, id: c.id, rawId: b64.enc(c.rawId), clientExtensionResults: c.getClientExtensionResults(),
+  response: {
+    clientDataJSON: b64.enc(c.response.clientDataJSON),
+    attestationObject: b64.enc(c.response.attestationObject),
+    transports: c.response.getTransports ? c.response.getTransports() : [],
+  },
+});
+const assertionJson = (c) => ({
+  type: c.type, id: c.id, rawId: b64.enc(c.rawId), clientExtensionResults: c.getClientExtensionResults(),
+  response: {
+    clientDataJSON: b64.enc(c.response.clientDataJSON),
+    authenticatorData: b64.enc(c.response.authenticatorData),
+    signature: b64.enc(c.response.signature),
+    ...(c.response.userHandle && { userHandle: b64.enc(c.response.userHandle) }),
+  },
+});
+
+function pkError(err) {
+  if (err.name === 'NotAllowedError') return 'Operação cancelada ou expirou. Tente de novo.';
+  if (err.name === 'InvalidStateError') return 'Este aparelho já está cadastrado.';
+  if (err.name === 'SecurityError') return 'O endereço do site não confere com o configurado no servidor (PASSKEY_RP_ID).';
+  return err.message;
+}
+
+async function loginWithPasskey() {
+  const { challengeId, options } = await api('/auth/passkey/options', { method: 'POST' });
+  const cred = await navigator.credentials.get({ publicKey: requestOptions(options.publicKey) });
+  const data = await api('/auth/passkey/login', { method: 'POST', body: { challengeId, credential: assertionJson(cred) } });
+  state.token = data.accessToken;
+  $('userEmail').textContent = data.email;
+  await showApp();
+}
+
+async function registerPasskey() {
+  const name = prompt('Dê um nome para este aparelho (ex.: Meu celular)', 'Meu celular');
+  if (name === null) return;
+  const { challengeId, options } = await api('/passkeys/register/options', { method: 'POST' });
+  const cred = await navigator.credentials.create({ publicKey: creationOptions(options.publicKey) });
+  await api('/passkeys/register/verify', { method: 'POST', body: { challengeId, name, credential: attestationJson(cred) } });
+}
+
+async function loadPasskeys() {
+  const ok = passkeysSupported();
+  $('pkUnsupported').classList.toggle('hidden', ok);
+  $('pkAdd').classList.toggle('hidden', !ok);
+  try {
+    const list = await api('/passkeys');
+    const d = (v) => new Date(v).toLocaleDateString('pt-BR');
+    $('pkList').innerHTML = list.length ? list.map((p) => `
+      <div class="flex items-center justify-between p-3 rounded-xl bg-slate-900/60 border border-slate-800">
+        <div class="min-w-0"><p class="text-sm font-semibold truncate">${esc(p.name)}</p>
+          <p class="text-xs text-slate-400">Criada em ${d(p.createdAt)}${p.lastUsedAt ? ' · último uso ' + d(p.lastUsedAt) : ''}</p></div>
+        <button data-delpk="${esc(p.id)}" class="text-xs text-slate-500 hover:text-red-400">Remover</button></div>`).join('')
+      : '<p class="text-sm text-slate-500">Nenhuma digital cadastrada.</p>';
+  } catch (err) { toast(err.message, true); }
+}
+
+$('pkLogin').onclick = async () => {
+  $('authError').classList.add('hidden');
+  try { await loginWithPasskey(); }
+  catch (err) { $('authError').textContent = pkError(err); $('authError').classList.remove('hidden'); }
+};
+$('pkAdd').onclick = async () => {
+  try { await registerPasskey(); toast('Digital ativada neste aparelho'); await loadPasskeys(); }
+  catch (err) { toast(pkError(err), true); }
+};
+$('pkList').onclick = async (e) => {
+  const id = e.target.dataset.delpk;
+  if (!id || !confirm('Remover esta digital? Você ainda poderá entrar com e-mail e senha.')) return;
+  try { await api(`/passkeys/${id}`, { method: 'DELETE' }); toast('Digital removida'); await loadPasskeys(); }
+  catch (err) { toast(err.message, true); }
+};
+if (passkeysSupported()) $('pkLoginBox').classList.remove('hidden');
 
 // ---------------------------------------------------------------- PWA
 let installEvent;

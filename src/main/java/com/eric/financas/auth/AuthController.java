@@ -6,6 +6,9 @@ import com.eric.financas.auth.dto.RegisterRequest;
 import com.eric.financas.auth.dto.TokenResponse;
 import com.eric.financas.common.config.AppProperties;
 import com.eric.financas.common.security.JwtService;
+import com.eric.financas.passkey.PasskeyService;
+import com.eric.financas.passkey.dto.PasskeyLoginRequest;
+import com.eric.financas.passkey.dto.PasskeyOptionsResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -35,6 +38,7 @@ public class AuthController {
     private final AuthService authService;
     private final JwtService jwtService;
     private final AppProperties props;
+    private final PasskeyService passkeyService;
 
     @PostMapping("/register")
     public ResponseEntity<TokenResponse> register(@Valid @RequestBody RegisterRequest request) {
@@ -44,6 +48,20 @@ public class AuthController {
     @PostMapping("/login")
     public ResponseEntity<TokenResponse> login(@Valid @RequestBody LoginRequest request) {
         return respond(HttpStatus.OK, authService.login(request));
+    }
+
+    /** Passo 1 do login por digital: gera o desafio que o celular vai assinar. */
+    @PostMapping("/passkey/options")
+    public PasskeyOptionsResponse passkeyOptions() {
+        return passkeyService.startLogin();
+    }
+
+    /** Passo 2: confere a assinatura e, se válida, entrega os mesmos tokens do login por senha. */
+    @PostMapping("/passkey/login")
+    public ResponseEntity<TokenResponse> passkeyLogin(@Valid @RequestBody PasskeyLoginRequest request,
+                                                      HttpServletRequest http) {
+        assertTrustedOrigin(http);
+        return respond(HttpStatus.OK, authService.loginWithPasskey(request));
     }
 
     @PostMapping("/refresh")

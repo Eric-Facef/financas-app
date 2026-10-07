@@ -8,6 +8,8 @@ import com.eric.financas.auth.dto.RegisterRequest;
 import com.eric.financas.common.exception.ConflictException;
 import com.eric.financas.common.exception.UnauthorizedException;
 import com.eric.financas.common.security.JwtService;
+import com.eric.financas.passkey.PasskeyService;
+import com.eric.financas.passkey.dto.PasskeyLoginRequest;
 import com.eric.financas.user.OnboardingService;
 import com.eric.financas.user.User;
 import com.eric.financas.user.UserRepository;
@@ -27,18 +29,21 @@ public class AuthService {
     private final RefreshTokenService refreshTokens;
     private final OnboardingService onboarding;
     private final AuditService audit;
+    private final PasskeyService passkeys;
 
     /** Hash "fantasma" para gastar o mesmo tempo quando o e-mail não existe (evita enumeração por timing). */
     private final String dummyHash;
 
     public AuthService(UserRepository users, PasswordEncoder encoder, JwtService jwt,
-                       RefreshTokenService refreshTokens, OnboardingService onboarding, AuditService audit) {
+                       RefreshTokenService refreshTokens, OnboardingService onboarding, AuditService audit,
+                       PasskeyService passkeys) {
         this.users = users;
         this.encoder = encoder;
         this.jwt = jwt;
         this.refreshTokens = refreshTokens;
         this.onboarding = onboarding;
         this.audit = audit;
+        this.passkeys = passkeys;
         this.dummyHash = encoder.encode("senha-fantasma");
     }
 
@@ -71,6 +76,14 @@ public class AuthService {
         }
 
         audit.record(user.getId(), AuditAction.LOGIN_SUCESSO, "User", user.getId().toString(), Map.of());
+        return tokensFor(user);
+    }
+
+    /** Login por digital: a assinatura é validada no PasskeyService; aqui só emitimos os tokens. */
+    public AuthTokens loginWithPasskey(PasskeyLoginRequest req) {
+        User user = passkeys.finishLogin(req);
+        audit.record(user.getId(), AuditAction.LOGIN_SUCESSO, "User", user.getId().toString(),
+                Map.of("metodo", "passkey"));
         return tokensFor(user);
     }
 

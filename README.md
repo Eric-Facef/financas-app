@@ -54,6 +54,7 @@ Variáveis no Render:
 | DATABASE_URL | `jdbc:postgresql://<host-pooler>/<db>?sslmode=require` |
 | FLYWAY_URL | mesma URL, mas do host **direto** (sem `-pooler`) |
 | DB_USER / DB_PASSWORD | credenciais do Neon |
+| PASSKEY_RP_ID | domínio do site, sem `https://` (ex.: `financas-app-3u4q.onrender.com`). Necessário para o login por digital |
 | ALLOWED_ORIGINS | URL(s) do front, separadas por vírgula (inclua a origem da própria API se o front for servido por ela) |
 | COOKIE_SECURE / COOKIE_SAMESITE | `true` / `None` se o front estiver em outro domínio; `true` / `Lax` se for o mesmo site |
 
@@ -106,3 +107,12 @@ Na raiz do projeto, o arquivo `.env` (já no `.gitignore`) é lido automaticamen
 - O lançamento aceita qualquer data (passada ou futura) em `occurredOn`.
 - O **saldo de cada conta é o de hoje**: lançamentos com data futura aparecem como "(agendado)" e só entram no saldo quando a data chega.
 - A **sobra do mês** é receitas - despesas do mês. O valor guardado na poupança no mês é líquido (guardado - devolvido) e nunca fica negativo.
+
+## Login por digital (passkeys / WebAuthn)
+
+- Biblioteca: `com.yubico:webauthn-server-core`. Código em `passkey/` (service, controller, repositório de credenciais) e na aba **Segurança** do front.
+- Fluxo de cadastro (usuário logado): `POST /api/v1/passkeys/register/options` -> o celular cria o par de chaves (pede digital) -> `POST /api/v1/passkeys/register/verify`. O servidor guarda só a **chave pública** (tabela `passkeys`, migration `V2`).
+- Fluxo de login: `POST /api/v1/auth/passkey/options` -> o celular assina o desafio -> `POST /api/v1/auth/passkey/login`, que devolve os mesmos tokens do login por senha.
+- A passkey fica **presa ao domínio** (`PASSKEY_RP_ID`). Se o endereço do site mudar, cada aparelho precisa cadastrar de novo. Em dev o padrão é `localhost`.
+- Os desafios ficam em memória por 5 minutos (serve para 1 instância).
+- Exige HTTPS (o `localhost` também vale). No iPhone use o Safari; na Android, o Chrome.

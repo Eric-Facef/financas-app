@@ -37,6 +37,9 @@
       <p id="authError" class="text-sm text-red-400 hidden"></p>
       <button class="btn" id="authSubmit">Entrar</button>
       <button type="button" id="authToggle" class="w-full text-xs text-cyan-400">Não tem conta? Cadastre-se</button>
+      <div id="pkLoginBox" class="hidden pt-3 border-t border-slate-800">
+        <button type="button" id="pkLogin" class="w-full rounded-lg border border-cyan-500/40 text-cyan-400 py-2.5 text-sm font-semibold hover:bg-cyan-500/10">🔐 Entrar com digital</button>
+      </div>
     </form>
   </div>
 
@@ -55,6 +58,7 @@
       <button class="tab on" data-tab="dash">Dashboard</button>
       <button class="tab" data-tab="poup">Poupança</button>
       <button class="tab" data-tab="contas">Contas</button>
+      <button class="tab" data-tab="seg">Segurança</button>
       <button class="tab" data-tab="audit">Auditoria</button>
     </nav>
 
@@ -158,6 +162,17 @@
         <button class="btn" id="accSubmit">Adicionar conta</button>
         <button type="button" id="accCancel" class="hidden w-full text-xs text-slate-400">Cancelar edição</button>
       </form>
+    </section>
+
+    <!-- SEGURANÇA -->
+    <section id="t-seg" class="hidden space-y-5 max-w-lg">
+      <div class="card space-y-3">
+        <h2 class="font-semibold">Login por digital / rosto</h2>
+        <p class="text-sm text-slate-400">Use a digital, o rosto ou o PIN do celular para entrar sem digitar a senha. Cadastre cada aparelho que você usa.</p>
+        <div id="pkList" class="space-y-2"></div>
+        <button id="pkAdd" class="btn">Ativar neste aparelho</button>
+        <p id="pkUnsupported" class="hidden text-xs text-amber-400">Este navegador não suporta login por digital.</p>
+      </div>
     </section>
 
     <!-- AUDITORIA -->
