@@ -1,8 +1,9 @@
 # ---- build ----
 FROM maven:3.9-eclipse-temurin-21 AS build
 WORKDIR /app
+# Sem "dependency:go-offline": ele resolve plugins e árvores transitivas inteiras e é o passo mais
+# sensível a artefatos SNAPSHOT/ausentes. O "package" já baixa só o que o projeto realmente usa.
 COPY pom.xml .
-RUN mvn -q -B dependency:go-offline
 COPY src ./src
 RUN mvn -q -B package -DskipTests
 
