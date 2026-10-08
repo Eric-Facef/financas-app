@@ -5,18 +5,36 @@
 // Para outro endereço, defina window.API_BASE antes de carregar este arquivo.
 const DEV_PORTS = ['5500', '5501', '5173'];
 const API = window.API_BASE ?? (DEV_PORTS.includes(location.port) ? `http://${location.hostname}:8080` : '');
-const state = { token: null, accounts: [], categories: [], dash: null, chart: null, registering: false, editingAcc: null, stmt: null, stFilter: 'all' };
+const state = { token: null, accounts: [], categories: [], dash: null, chart: null, registering: false, editingAcc: null, stmt: null, stFilter: 'all', txs: [], hidden: false, printing: false };
+
+const store = {
+  get: (k, d = null) => { try { return localStorage.getItem(k) ?? d; } catch { return d; } },
+  set: (k, v) => { try { localStorage.setItem(k, v); } catch { /* sem armazenamento */ } },
+};
+state.hidden = store.get('fin.hide') === '1';
 
 const $ = (id) => document.getElementById(id);
 const iso = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 const fmtDate = (s) => s.split('-').reverse().join('/');
-const brl = (v) => Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+const brl = (v) => (state.hidden && !state.printing ? 'R$ ••••' : Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
+// ---- cor do banco (pelo nome da conta)
+const norm = (s) => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+const BANKS = [
+  [/santander/, '#ff2a2a'], [/\bbb\b|banco do brasil|brasil/, '#ffd400'], [/nubank|\bnu\b/, '#a63cff'],
+  [/itau/, '#ff7a1a'], [/bradesco/, '#ff2d6f'], [/caixa|\bcef\b/, '#2f8cff'], [/\binter\b/, '#ff8a00'],
+  [/\bc6\b/, '#d9d9e0'], [/picpay/, '#21e06b'], [/mercado ?pago/, '#2cc7ff'], [/sicredi/, '#7ed321'],
+  [/sicoob/, '#00c2a8'], [/\bbtg\b/, '#4d7cff'],
+];
+const bankColor = (a) => (BANKS.find(([re]) => re.test(norm(a.name))) || [])[1] || (a.type === 'SAVINGS' ? '#7c8cff' : '#00e5ff');
+const bankStyle = (a) => { const c = bankColor(a); return `--c:${c};--c-rgb:${[1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16)).join(',')}`; };
+const accCard = (a) => `<div class="card acc-card" style="${bankStyle(a)}"><p class="text-xs acc-name truncate">${esc(a.name)}</p><h3 class="text-xl font-bold mt-1">${brl(a.balance)}</h3></div>`;
+
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 function toast(msg, isError = false) {
   const el = $('toast');
   el.textContent = msg;
-  el.className = `fixed bottom-4 left-1/2 -translate-x-1/2 px-4 py-2 rounded-lg text-sm shadow-lg ${isError ? 'bg-red-600' : 'bg-emerald-600'}`;
+  el.className = `fixed bottom-4 left-1/2 -translate-x-1/2 px-4 py-2 rounded-lg text-sm shadow-lg ${isError ? 'toast-err' : 'toast-ok'}`;
   clearTimeout(toast.t);
   toast.t = setTimeout(() => el.classList.add('hidden'), 3500);
 }
@@ -56,15 +74,21 @@ function refresh() {
   return refreshing;
 }
 
-function showAuth() {
+function showAuth(note) {
   state.token = null;
+  Object.assign(state, { dash: null, accounts: [], txs: [], stmt: null });
+  state.chart?.destroy(); state.chart = null;
+  ['summary', 'accGroups', 'txList', 'stmtDoc', 'savCards', 'accList', 'auditBody', 'pkList', 'txCat', 'txAcc', 'gFrom', 'gTo', 'rFrom', 'rTo', 'stAcc'].forEach((id) => ($(id).innerHTML = ''));
+  ['leftover', 'rBalance', 'expTotal'].forEach((id) => ($(id).textContent = ''));
   $('appView').classList.add('hidden');
   $('authView').classList.remove('hidden');
+  $('authNote').textContent = note || ''; $('authNote').classList.toggle('hidden', !note);
 }
 
 async function showApp() {
   $('authView').classList.add('hidden');
   $('appView').classList.remove('hidden');
+  idle.last = Date.now();
   await load();
 }
 
@@ -93,10 +117,11 @@ $('authForm').onsubmit = async (e) => {
   }
 };
 
-$('logoutBtn').onclick = async () => {
+async function logout(note) {
   await fetch(`${API}/api/v1/auth/logout`, { method: 'POST', credentials: API ? 'include' : 'same-origin' }).catch(() => {});
-  showAuth();
-};
+  showAuth(note);
+}
+$('logoutBtn').onclick = () => logout();
 
 // ---------------------------------------------------------------- dados
 const currentMonth = () => iso().slice(0, 7);
@@ -112,8 +137,8 @@ async function load() {
       api(`/transactions?month=${month}&size=100`),
       api('/audit?size=50'),
     ]);
-    Object.assign(state, { dash, accounts: dash.accounts, categories: cats });
-    renderAccounts(); renderChart(); renderSelects(); renderTransactions(txs.content); renderAudit(audit.content); renderSavings(); renderAccountsTab();
+    Object.assign(state, { dash, accounts: dash.accounts, categories: cats, txs: txs.content });
+    renderAccounts(); renderChart(); renderSelects(); renderTransactions(state.txs); renderAudit(audit.content); renderSavings(); renderAccountsTab();
   } catch (err) { toast(err.message, true); }
 }
 
@@ -124,20 +149,17 @@ const sum = (list) => list.reduce((acc, a) => acc + a.balance, 0);
 function renderAccounts() {
   const d = state.dash, cc = byType('CHECKING'), sv = byType('SAVINGS');
   $('summary').innerHTML = `
-    <div class="card border-l-4 border-l-cyan-400"><p class="text-xs uppercase text-slate-400">Total geral</p>
-      <h3 class="text-2xl font-bold mt-1">${brl(d.totalBalance)}</h3>
-      <p class="text-xs text-slate-500 mt-1">Contas ${brl(sum(cc))} · Poupança ${brl(sum(sv))}</p></div>
-    <div class="card border-l-4 border-l-purple-400"><p class="text-xs uppercase text-slate-400">Sobra do mês</p>
-      <h3 class="text-2xl font-bold mt-1 text-purple-400">${brl(d.leftover)}</h3>
-      <p class="text-xs text-slate-500 mt-1">Receitas ${brl(d.income)} · Despesas ${brl(d.expenses)}</p></div>`;
+    <div class="card acc-card" style="--c:#00e5ff;--c-rgb:0,229,255"><p class="text-xs text-slate-400">Total geral</p>
+      <h3 class="text-3xl font-bold mt-1">${brl(d.totalBalance)}</h3>
+      <p class="text-xs text-slate-500 mt-2">Contas ${brl(sum(cc))} · Poupança ${brl(sum(sv))}</p></div>
+    <div class="card acc-card" style="--c:#b98cff;--c-rgb:185,140,255"><p class="text-xs text-slate-400">Sobra do mês</p>
+      <h3 class="text-3xl font-bold mt-1 ${d.leftover < 0 ? 'text-red-400' : 'text-purple-400'}">${brl(d.leftover)}</h3>
+      <p class="text-xs text-slate-500 mt-2">Receitas <span class="text-emerald-400">${brl(d.income)}</span> · Despesas <span class="text-red-400">${brl(d.expenses)}</span></p></div>`;
 
-  const group = (title, list, color, text) => `
+  const group = (title, list, text) => `
     <div><div class="flex items-baseline gap-3 mb-2"><h2 class="font-semibold">${title}</h2><span class="text-sm font-semibold ${text}">${brl(sum(list))}</span></div>
-      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">${list.map((a) => `
-        <div class="card border-l-4 ${color}"><p class="text-xs uppercase text-slate-400">${esc(a.name)}</p>
-          <h3 class="text-xl font-bold mt-1">${brl(a.balance)}</h3></div>`).join('') || '<p class="text-sm text-slate-500">Nenhuma conta. Adicione na aba Contas.</p>'}
-      </div></div>`;
-  $('accGroups').innerHTML = group('Contas correntes', cc, 'border-l-cyan-400', 'text-cyan-400') + group('Poupança', sv, 'border-l-emerald-400', 'text-emerald-400');
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">${list.map(accCard).join('') || '<p class="text-sm text-slate-500">Nenhuma conta. Adicione na aba Contas.</p>'}</div></div>`;
+  $('accGroups').innerHTML = group('Contas correntes', cc, 'text-cyan-400') + group('Poupança', sv, 'text-purple-400');
 }
 
 function renderChart() {
@@ -149,10 +171,10 @@ function renderChart() {
   if (!list.length) return;
   state.chart = new Chart($('chart'), {
     type: 'doughnut',
-    data: { labels: list.map((c) => `${c.name} (${c.percentage}%)`), datasets: [{ data: list.map((c) => c.total), backgroundColor: list.map((c) => c.color || '#64748b'), borderWidth: 0 }] },
+    data: { labels: list.map((c) => `${c.name} (${c.percentage}%)`), datasets: [{ data: list.map((c) => c.total), backgroundColor: list.map((c) => c.color || '#6d6d7c'), borderColor: '#000', borderWidth: 2 }] },
     options: {
-      responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { position: 'bottom', labels: { color: '#94a3b8', font: { size: 11 } } },
+      responsive: true, maintainAspectRatio: false, cutout: '68%',
+      plugins: { legend: { position: 'bottom', labels: { color: '#a1a1b0', font: { size: 11 } } },
         tooltip: { callbacks: { label: (ctx) => ` ${brl(ctx.raw)}` } } },
     },
   });
@@ -166,8 +188,10 @@ function fill(id, list, withBalance = true) {
 
 function renderSelects() {
   const kind = $('txType').value;
+  const prevCat = $('txCat').value;
   $('txCat').innerHTML = state.categories.filter((c) => c.kind === kind)
     .map((c) => `<option value="${esc(c.id)}">${esc(c.icon || '')} ${esc(c.name)}</option>`).join('');
+  if ([...$('txCat').options].some((o) => o.value === prevCat)) $('txCat').value = prevCat;
   fill('txAcc', state.accounts, false);
   fill('gFrom', byType('CHECKING')); fill('gTo', byType('SAVINGS'));
   fill('rFrom', byType('SAVINGS')); fill('rTo', byType('CHECKING'));
@@ -198,16 +222,14 @@ function renderAudit(list) {
 
 function renderSavings() {
   $('leftover').textContent = brl(Math.max(state.dash.availableLeftover, 0));
-  $('savCards').innerHTML = byType('SAVINGS').map((a) => `
-    <div class="card border-l-4 border-l-emerald-400"><p class="text-xs uppercase text-slate-400">${esc(a.name)}</p>
-    <h3 class="text-xl font-bold mt-1">${brl(a.balance)}</h3></div>`).join('')
-    || '<p class="text-sm text-slate-500">Nenhuma poupança. Adicione na aba Contas.</p>';
+  $('savCards').innerHTML = byType('SAVINGS').map(accCard).join('') || '<p class="text-sm text-slate-500">Nenhuma poupança. Adicione na aba Contas.</p>';
 }
 
 function renderAccountsTab() {
   $('accList').innerHTML = state.accounts.map((a) => `
-    <div class="flex items-center justify-between p-3 rounded-xl bg-slate-900/60 border border-slate-800">
-      <div class="min-w-0"><p class="text-sm font-semibold truncate">${esc(a.name)}</p>
+    <div class="flex items-center justify-between gap-3 p-3 rounded-xl bg-slate-900/60 border border-slate-800" style="${bankStyle(a)}">
+      <span class="dot"></span>
+      <div class="min-w-0 flex-1"><p class="text-sm font-semibold truncate">${esc(a.name)}</p>
         <p class="text-xs text-slate-400">${a.type === 'SAVINGS' ? 'Poupança' : 'Conta corrente'} · ${brl(a.balance)}</p></div>
       <div class="flex gap-3 text-xs"><button data-edit="${esc(a.id)}" class="text-cyan-400">Editar</button>
         <button data-delacc="${esc(a.id)}" class="text-slate-500 hover:text-red-400">Excluir</button></div></div>`).join('');
@@ -372,7 +394,7 @@ function renderStatement() {
 
   $('stmtDoc').innerHTML = `
     <div class="flex justify-between items-start gap-3 pb-3 border-b border-slate-700">
-      <div><p class="text-xs uppercase tracking-wide text-slate-400">Extrato</p>
+      <div><p class="text-xs text-slate-400">Extrato</p>
         <h2 class="text-lg font-bold">${esc(s.accountName)}</h2>
         <p class="text-xs text-slate-400">${fmtDate(s.from)} a ${fmtDate(s.to)}</p></div>
       <div class="text-right text-xs text-slate-400"><p class="font-semibold">Finanças</p>
@@ -383,11 +405,11 @@ function renderStatement() {
       ${row('Saídas', '− ' + brl(s.totalOut), 'neg text-red-400')}${row('Saldo final', brl(s.closingBalance))}
     </div>
     ${days.length ? days.map((d) => `
-      <div class="pt-4"><p class="text-xs font-semibold uppercase tracking-wide text-slate-400 pb-1">${esc(dayTitle(d.date))}</p>
+      <div class="pt-4"><p class="text-xs font-semibold text-slate-400 pb-1">${esc(dayTitle(d.date))}</p>
         <div class="divide-y divide-slate-800/70">${d.entries.map((e) => stmtEntryHtml(e, s.consolidated)).join('')}</div>
         ${f === 'all' ? `<div class="flex justify-between text-xs text-slate-400 pt-2 border-t border-slate-800"><span>Saldo do dia</span><span class="font-semibold">${brl(d.closingBalance)}</span></div>` : ''}
       </div>`).join('') : '<p class="text-sm text-slate-500 text-center py-6">Nenhum lançamento no período.</p>'}
-    ${upcoming.length ? `<div class="pt-5"><p class="text-xs font-semibold uppercase tracking-wide text-amber-400 pb-1">Agendados (ainda não entram no saldo)</p>
+    ${upcoming.length ? `<div class="pt-5"><p class="text-xs font-semibold text-amber-400 pb-1">Agendados (ainda não entram no saldo)</p>
       <div class="divide-y divide-slate-800/70">${upcoming.map((e) => stmtEntryHtml(e, s.consolidated, true)).join('')}</div></div>` : ''}`;
 }
 
@@ -514,6 +536,42 @@ $('pkList').onclick = async (e) => {
   catch (err) { toast(err.message, true); }
 };
 if (passkeysSupported()) $('pkLoginBox').classList.remove('hidden');
+
+// ---------------------------------------------------------------- olho: esconde os valores
+function setHidden(v) {
+  state.hidden = v; store.set('fin.hide', v ? '1' : '0');
+  $('eyeBtn').setAttribute('aria-pressed', String(v));
+  $('eyeOn').classList.toggle('hidden', v); $('eyeOff').classList.toggle('hidden', !v);
+  if (state.dash) { renderAccounts(); renderChart(); renderSelects(); renderTransactions(state.txs); renderSavings(); renderAccountsTab(); renderStatement(); }
+}
+$('eyeBtn').onclick = () => setHidden(!state.hidden);
+setHidden(state.hidden);
+// o extrato impresso / em PDF sempre sai com os valores
+window.addEventListener('beforeprint', () => { state.printing = true; renderStatement(); });
+window.addEventListener('afterprint', () => { state.printing = false; renderStatement(); });
+
+// ---------------------------------------------------------------- sair após ficar sem mexer
+const idle = { last: Date.now(), warn: false };
+const IDLE_WARN_S = 30;
+const hideIdleWarn = () => { idle.warn = false; $('idleWarn').classList.add('hidden'); };
+const bump = () => { idle.last = Date.now(); if (idle.warn) hideIdleWarn(); };
+['pointerdown', 'keydown', 'touchstart', 'wheel', 'scroll'].forEach((ev) => window.addEventListener(ev, bump, { passive: true, capture: true }));
+
+function idleTick() {
+  const limit = Number(store.get('fin.idleMin', '5')) * 60000;
+  if (!limit || $('appView').classList.contains('hidden')) return hideIdleWarn();
+  const left = limit - (Date.now() - idle.last);
+  if (left <= 0) { hideIdleWarn(); return logout('Você saiu por inatividade. Entre de novo para continuar.'); }
+  if (left <= IDLE_WARN_S * 1000) {
+    $('idleMsg').textContent = `Saindo por inatividade em ${Math.ceil(left / 1000)}s`;
+    idle.warn = true; $('idleWarn').classList.remove('hidden');
+  }
+}
+setInterval(idleTick, 1000);   // compara horários (não conta ticks): funciona mesmo se o celular suspender o app
+document.addEventListener('visibilitychange', () => { if (!document.hidden) idleTick(); });
+$('idleStay').onclick = bump;
+$('idleSel').value = store.get('fin.idleMin', '5');
+$('idleSel').onchange = () => { store.set('fin.idleMin', $('idleSel').value); bump(); toast('Configuração salva'); };
 
 // ---------------------------------------------------------------- PWA
 let installEvent;
