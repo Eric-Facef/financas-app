@@ -5,7 +5,7 @@
 // Para outro endereço, defina window.API_BASE antes de carregar este arquivo.
 const DEV_PORTS = ['5500', '5501', '5173'];
 const API = window.API_BASE ?? (DEV_PORTS.includes(location.port) ? `http://${location.hostname}:8080` : '');
-const state = { token: null, accounts: [], categories: [], dash: null, chart: null, registering: false, editingAcc: null, stmt: null, stFilter: 'all', txs: [], hidden: false, printing: false };
+const state = { token: null, accounts: [], categories: [], dash: null, chart: null, registering: false, editingAcc: null, stmt: null, stFilter: 'all', txs: [], hidden: false, printing: false, notes: [], wd: null, wdChart: null, wdMode: 'total', editingNote: null };
 
 const store = {
   get: (k, d = null) => { try { return localStorage.getItem(k) ?? d; } catch { return d; } },
@@ -76,10 +76,11 @@ function refresh() {
 
 function showAuth(note) {
   state.token = null;
-  Object.assign(state, { dash: null, accounts: [], txs: [], stmt: null });
+  Object.assign(state, { dash: null, accounts: [], txs: [], stmt: null, notes: [], wd: null, editingNote: null });
   state.chart?.destroy(); state.chart = null;
-  ['summary', 'accGroups', 'txList', 'stmtDoc', 'savCards', 'accList', 'auditBody', 'pkList', 'txCat', 'txAcc', 'gFrom', 'gTo', 'rFrom', 'rTo', 'stAcc'].forEach((id) => ($(id).innerHTML = ''));
-  ['leftover', 'rBalance', 'expTotal'].forEach((id) => ($(id).textContent = ''));
+  state.wdChart?.destroy(); state.wdChart = null;
+  ['summary', 'accGroups', 'txList', 'stmtDoc', 'savCards', 'accList', 'auditBody', 'pkList', 'txCat', 'txAcc', 'gFrom', 'gTo', 'rFrom', 'rTo', 'stAcc', 'noteList'].forEach((id) => ($(id).innerHTML = ''));
+  ['leftover', 'rBalance', 'expTotal', 'wdTop', 'wdSub'].forEach((id) => ($(id).textContent = ''));
   $('appView').classList.add('hidden');
   $('authView').classList.remove('hidden');
   $('authNote').textContent = note || ''; $('authNote').classList.toggle('hidden', !note);
@@ -131,14 +132,16 @@ async function load() {
   if (!/^\d{4}-\d{2}$/.test($('month').value)) $('month').value = currentMonth();
   const month = $('month').value;
   try {
-    const [dash, cats, txs, audit] = await Promise.all([
+    const [dash, cats, txs, audit, wd, notes] = await Promise.all([
       api(`/dashboard?month=${month}`),
       api('/categories'),
       api(`/transactions?month=${month}&size=100`),
       api('/audit?size=50'),
+      api(`/reports/weekday?month=${month}`).catch(() => null),
+      api('/notes').catch(() => null),
     ]);
-    Object.assign(state, { dash, accounts: dash.accounts, categories: cats, txs: txs.content });
-    renderAccounts(); renderChart(); renderSelects(); renderTransactions(state.txs); renderAudit(audit.content); renderSavings(); renderAccountsTab();
+    Object.assign(state, { dash, accounts: dash.accounts, categories: cats, txs: txs.content, wd, notes: notes ?? state.notes });
+    renderAccounts(); renderChart(); renderSelects(); renderTransactions(state.txs); renderAudit(audit.content); renderSavings(); renderAccountsTab(); renderWeekday(); renderNotes();
   } catch (err) { toast(err.message, true); }
 }
 
@@ -340,11 +343,134 @@ $('accForm').onsubmit = async (e) => {
 
 function setTab(name) {
   document.querySelectorAll('.tab').forEach((b) => b.classList.toggle('on', b.dataset.tab === name));
-  ['dash', 'ext', 'poup', 'contas', 'seg', 'audit'].forEach((t) => $(`t-${t}`).classList.toggle('hidden', t !== name));
+  ['dash', 'ext', 'rel', 'poup', 'contas', 'notas', 'seg', 'audit'].forEach((t) => $(`t-${t}`).classList.toggle('hidden', t !== name));
   if (name === 'seg') loadPasskeys();
   if (name === 'ext') loadStatement();
+  if (name === 'rel') { renderChart(); renderWeekday(); }   // gráficos recriados já com a aba visível (tamanho certo)
+  if (name === 'notas') loadNotes();
 }
 document.querySelectorAll('.tab').forEach((b) => (b.onclick = () => setTab(b.dataset.tab)));
+
+// ---------------------------------------------------------------- relatório: gasto por dia da semana
+const WD = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo'];
+
+function renderWeekday() {
+  const r = state.wd;
+  state.wdChart?.destroy(); state.wdChart = null;
+  const empty = !r || Number(r.total) === 0;
+  $('wdEmpty').textContent = r ? 'Sem despesas neste mês.' : 'Relatório indisponível no momento.';
+  $('wdEmpty').classList.toggle('hidden', !empty);
+  $('wdChart').classList.toggle('hidden', empty);
+  $('wdTop').textContent = '';
+  $('wdSub').textContent = '';
+  if (r) {
+    const [y, m] = r.month.split('-').map(Number);
+    const label = new Date(y, m - 1, 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+    $('wdSub').textContent = `${label} · até ${fmtDate(r.until)}`;
+  }
+  if (empty) return;
+
+  const avg = state.wdMode === 'avg';
+  const vals = r.days.map((d) => Number(avg ? d.average : d.total));
+  const top = vals.indexOf(Math.max(...vals));
+  const d = r.days[top];
+  $('wdTop').textContent = `Dia com mais gastos: ${WD[top]}, ${brl(vals[top])}`
+    + (avg ? ' em média por dia.' : ` em ${d.entries} lançamento${d.entries === 1 ? '' : 's'}.`);
+
+  state.wdChart = new Chart($('wdChart'), {
+    type: 'bar',
+    data: { labels: WD.map((n) => n.slice(0, 3)), datasets: [{ data: vals, borderRadius: 6,
+      backgroundColor: vals.map((_, i) => (i === top ? '#ff4d6d' : 'rgba(255,77,109,.35)')) }] },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: (c) => ` ${brl(c.raw)}` } } },
+      scales: {
+        x: { grid: { display: false }, ticks: { color: '#a1a1b0' } },
+        y: { beginAtZero: true, grid: { color: '#1d1d27' },
+          ticks: { color: '#8f8fa0', callback: (v) => (state.hidden ? '' : Number(v).toLocaleString('pt-BR')) } },
+      },
+    },
+  });
+}
+
+document.querySelectorAll('[data-wd]').forEach((b) => (b.onclick = () => {
+  state.wdMode = b.dataset.wd;
+  document.querySelectorAll('[data-wd]').forEach((x) => x.classList.toggle('on', x === b));
+  renderWeekday();
+}));
+
+// ---------------------------------------------------------------- notas (lembretes soltos)
+function renderNotes() {
+  const pending = state.notes.filter((n) => !n.done).length, done = state.notes.length - pending;
+  document.querySelector('[data-tab=notas]').textContent = pending ? `Notas (${pending})` : 'Notas';
+  $('noteClear').classList.toggle('hidden', done === 0);
+  $('noteClear').textContent = `Apagar feitas (${done})`;
+  $('noteList').innerHTML = state.notes.length ? state.notes.map((n) => `
+    <div class="flex items-center gap-3 p-3 rounded-xl bg-slate-900/60 border border-slate-800">
+      <button data-ndone="${esc(n.id)}" role="checkbox" aria-checked="${n.done}" aria-label="Marcar como feita" class="note-box ${n.done ? 'on' : ''}">${n.done ? '✓' : ''}</button>
+      ${state.editingNote === n.id
+        ? `<input data-nedit="${esc(n.id)}" class="in flex-1" maxlength="300" aria-label="Editar nota" value="${esc(n.text)}">`
+        : `<p data-ntext="${esc(n.id)}" class="flex-1 text-sm break-words cursor-text ${n.done ? 'line-through text-slate-500' : ''}">${esc(n.text)}</p>`}
+      <button data-ndel="${esc(n.id)}" class="text-slate-500 hover:text-red-400 px-1" aria-label="Excluir nota">✕</button></div>`).join('')
+    : '<p class="text-sm text-slate-500 text-center py-4">Nenhuma nota. Escreva um lembrete acima, por exemplo: dar R$ 7 para a mãe.</p>';
+  $('noteList').querySelector('[data-nedit]')?.focus();
+}
+
+async function loadNotes() {
+  try { state.notes = await api('/notes'); renderNotes(); }
+  catch (err) { toast(err.message, true); }
+}
+
+$('noteForm').onsubmit = async (e) => {
+  e.preventDefault();
+  const text = $('noteText').value.trim();
+  if (!text) return;
+  try {
+    await api('/notes', { method: 'POST', body: { text } });
+    $('noteText').value = '';
+    await loadNotes();
+  } catch (err) { toast(err.message, true); }
+};
+
+$('noteList').onclick = async (e) => {
+  const t = e.target.closest('[data-ndone],[data-ndel],[data-ntext]');
+  if (!t) return;
+  try {
+    if (t.dataset.ndone) {
+      const n = state.notes.find((x) => x.id === t.dataset.ndone);
+      n.done = !n.done; renderNotes();   // marca na hora; a lista é recarregada em seguida (feitas vão para o fim)
+      await api(`/notes/${n.id}`, { method: 'PUT', body: { text: n.text, done: n.done } });
+      await loadNotes();
+    } else if (t.dataset.ndel) {
+      await api(`/notes/${t.dataset.ndel}`, { method: 'DELETE' });
+      await loadNotes();
+    } else {
+      state.editingNote = t.dataset.ntext; renderNotes();
+    }
+  } catch (err) { toast(err.message, true); await loadNotes(); }
+};
+
+async function saveNoteEdit(input) {
+  const id = input.dataset.nedit;
+  if (state.editingNote !== id) return;   // já cancelado/salvo (o blur dispara de novo ao remover o campo)
+  state.editingNote = null;
+  const n = state.notes.find((x) => x.id === id), text = input.value.trim();
+  if (!n || !text || text === n.text) return renderNotes();
+  try { await api(`/notes/${id}`, { method: 'PUT', body: { text, done: n.done } }); await loadNotes(); }
+  catch (err) { toast(err.message, true); renderNotes(); }
+}
+$('noteList').addEventListener('focusout', (e) => { if (e.target.dataset?.nedit) saveNoteEdit(e.target); });
+$('noteList').addEventListener('keydown', (e) => {
+  if (!e.target.dataset?.nedit) return;
+  if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); }                 // o blur salva
+  if (e.key === 'Escape') { state.editingNote = null; renderNotes(); }           // cancela sem salvar
+});
+
+$('noteClear').onclick = async () => {
+  if (!confirm('Apagar todas as notas marcadas como feitas?')) return;
+  try { await api('/notes/done', { method: 'DELETE' }); toast('Notas feitas apagadas'); await loadNotes(); }
+  catch (err) { toast(err.message, true); }
+};
 
 // ---------------------------------------------------------------- extrato (por conta ou total)
 const dayTitle = (s) => {
@@ -542,7 +668,7 @@ function setHidden(v) {
   state.hidden = v; store.set('fin.hide', v ? '1' : '0');
   $('eyeBtn').setAttribute('aria-pressed', String(v));
   $('eyeOn').classList.toggle('hidden', v); $('eyeOff').classList.toggle('hidden', !v);
-  if (state.dash) { renderAccounts(); renderChart(); renderSelects(); renderTransactions(state.txs); renderSavings(); renderAccountsTab(); renderStatement(); }
+  if (state.dash) { renderAccounts(); renderChart(); renderSelects(); renderTransactions(state.txs); renderSavings(); renderAccountsTab(); renderStatement(); renderWeekday(); }
 }
 $('eyeBtn').onclick = () => setHidden(!state.hidden);
 setHidden(state.hidden);
