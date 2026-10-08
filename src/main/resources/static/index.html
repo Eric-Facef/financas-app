@@ -24,6 +24,17 @@
     .tab{padding-bottom:.5rem;border-bottom:2px solid transparent;color:#94a3b8;white-space:nowrap}
     .tab.on{border-color:#22d3ee;color:#22d3ee;font-weight:600}
     input[type=date]{color-scheme:dark}
+    .chip.on{border-color:#22d3ee;color:#22d3ee}
+    /* Impressão / PDF: só o extrato, em fundo branco */
+    @media print{
+      body{background:#fff!important}
+      #authView,#toast,#appView>header,#appView>nav,#appView>section:not(#t-ext),#t-ext .no-print{display:none!important}
+      #appView{padding:0!important;max-width:none!important}
+      .stmt{background:#fff!important;border:none!important;padding:0!important}
+      .stmt *{color:#111!important;border-color:#ccc!important}
+      .stmt .pos{color:#047857!important}
+      .stmt .neg{color:#b91c1c!important}
+    }
   </style>
 </head>
 <body class="min-h-screen">
@@ -56,6 +67,7 @@
 
     <nav class="flex gap-4 text-sm border-b border-slate-800 overflow-x-auto">
       <button class="tab on" data-tab="dash">Dashboard</button>
+      <button class="tab" data-tab="ext">Extrato</button>
       <button class="tab" data-tab="poup">Poupança</button>
       <button class="tab" data-tab="contas">Contas</button>
       <button class="tab" data-tab="seg">Segurança</button>
@@ -94,6 +106,34 @@
         <h2 class="font-semibold mb-3">Lançamentos do mês</h2>
         <div id="txList" class="space-y-2 max-h-96 overflow-y-auto"></div>
       </div>
+    </section>
+
+    <!-- EXTRATO -->
+    <section id="t-ext" class="hidden space-y-4">
+      <div class="card no-print grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div><label class="lbl">Extrato de</label><select id="stAcc" class="in"><option value="">Total (todas as contas)</option></select></div>
+        <div><label class="lbl">Período</label>
+          <select id="stPeriod" class="in">
+            <option value="month">Este mês</option><option value="prev">Mês passado</option>
+            <option value="30">Últimos 30 dias</option><option value="custom">Personalizado</option>
+          </select></div>
+        <div id="stCustom" class="hidden grid grid-cols-2 gap-3 sm:col-span-2">
+          <div><label class="lbl">De</label><input id="stFrom" type="date" class="in"></div>
+          <div><label class="lbl">Até</label><input id="stTo" type="date" class="in"></div>
+        </div>
+      </div>
+      <div class="no-print flex flex-wrap items-center justify-between gap-2">
+        <div class="flex gap-2">
+          <button class="chip on" data-sf="all">Tudo</button>
+          <button class="chip" data-sf="in">Entradas</button>
+          <button class="chip" data-sf="out">Saídas</button>
+        </div>
+        <div class="flex gap-2">
+          <button id="stCsv" class="chip">Baixar CSV</button>
+          <button id="stPrint" class="chip">Imprimir / PDF</button>
+        </div>
+      </div>
+      <article id="stmtDoc" class="stmt card"></article>
     </section>
 
     <!-- POUPANÇA -->

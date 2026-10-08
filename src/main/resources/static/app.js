@@ -5,7 +5,7 @@
 // Para outro endereço, defina window.API_BASE antes de carregar este arquivo.
 const DEV_PORTS = ['5500', '5501', '5173'];
 const API = window.API_BASE ?? (DEV_PORTS.includes(location.port) ? `http://${location.hostname}:8080` : '');
-const state = { token: null, accounts: [], categories: [], dash: null, chart: null, registering: false, editingAcc: null };
+const state = { token: null, accounts: [], categories: [], dash: null, chart: null, registering: false, editingAcc: null, stmt: null, stFilter: 'all' };
 
 const $ = (id) => document.getElementById(id);
 const iso = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -172,6 +172,10 @@ function renderSelects() {
   fill('gFrom', byType('CHECKING')); fill('gTo', byType('SAVINGS'));
   fill('rFrom', byType('SAVINGS')); fill('rTo', byType('CHECKING'));
   $('rBalance').textContent = brl(state.accounts.find((a) => a.id === $('rFrom').value)?.balance ?? 0);
+  const prevStmt = $('stAcc').value;
+  $('stAcc').innerHTML = '<option value="">Total (todas as contas)</option>'
+    + state.accounts.map((a) => `<option value="${esc(a.id)}">${esc(a.name)}</option>`).join('');
+  if ([...$('stAcc').options].some((o) => o.value === prevStmt)) $('stAcc').value = prevStmt;
 }
 
 function renderTransactions(list) {
@@ -314,10 +318,107 @@ $('accForm').onsubmit = async (e) => {
 
 function setTab(name) {
   document.querySelectorAll('.tab').forEach((b) => b.classList.toggle('on', b.dataset.tab === name));
-  ['dash', 'poup', 'contas', 'seg', 'audit'].forEach((t) => $(`t-${t}`).classList.toggle('hidden', t !== name));
+  ['dash', 'ext', 'poup', 'contas', 'seg', 'audit'].forEach((t) => $(`t-${t}`).classList.toggle('hidden', t !== name));
   if (name === 'seg') loadPasskeys();
+  if (name === 'ext') loadStatement();
 }
 document.querySelectorAll('.tab').forEach((b) => (b.onclick = () => setTab(b.dataset.tab)));
+
+// ---------------------------------------------------------------- extrato (por conta ou total)
+const dayTitle = (s) => {
+  const [y, m, d] = s.split('-').map(Number);
+  const t = new Date(y, m - 1, d).toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' });
+  return t.charAt(0).toUpperCase() + t.slice(1);
+};
+
+function stmtRange(kind) {
+  const now = new Date(), y = now.getFullYear(), m = now.getMonth();
+  if (kind === 'month') return [iso(new Date(y, m, 1)), iso(new Date(y, m + 1, 0))];
+  if (kind === 'prev') return [iso(new Date(y, m - 1, 1)), iso(new Date(y, m, 0))];
+  if (kind === '30') return [iso(new Date(y, m, now.getDate() - 29)), iso(now)];
+  return [$('stFrom').value, $('stTo').value];
+}
+
+async function loadStatement() {
+  const [from, to] = stmtRange($('stPeriod').value);
+  if (!from || !to) return;
+  const q = new URLSearchParams({ from, to });
+  if ($('stAcc').value) q.set('accountId', $('stAcc').value);
+  try { state.stmt = await api(`/statements?${q}`); renderStatement(); }
+  catch (err) { toast(err.message, true); }
+}
+
+function stmtEntryHtml(e, consolidated, withDate = false) {
+  const amount = e.internal ? `<span class="font-semibold text-slate-300">${brl(e.amount)}</span>`
+    : e.delta >= 0 ? `<span class="font-semibold pos text-emerald-400">+ ${brl(e.amount)}</span>`
+      : `<span class="font-semibold neg text-red-400">− ${brl(e.amount)}</span>`;
+  const icon = e.type.startsWith('TRANSFER') ? '🔁' : esc(e.categoryIcon || '💳');
+  const sub = [e.label || e.categoryName, consolidated && !e.internal ? e.accountName : null, withDate ? fmtDate(e.date) : null]
+    .filter(Boolean).map(esc).join(' · ');
+  return `<div class="flex items-center justify-between gap-3 py-2">
+    <div class="flex items-center gap-3 min-w-0"><span class="text-lg">${icon}</span>
+      <div class="min-w-0"><p class="text-sm font-semibold truncate">${esc(e.description)}</p><p class="text-xs text-slate-400">${sub}</p></div></div>
+    <div class="text-sm whitespace-nowrap">${amount}</div></div>`;
+}
+
+function renderStatement() {
+  const s = state.stmt;
+  if (!s) return;
+  const f = state.stFilter;
+  const keep = (e) => f === 'all' || (f === 'in' && e.delta > 0) || (f === 'out' && e.delta < 0);
+  const days = [...s.days].reverse().map((d) => ({ ...d, entries: d.entries.filter(keep).reverse() })).filter((d) => d.entries.length);
+  const upcoming = s.scheduled.filter(keep);
+  const row = (label, value, cls = '') => `<div class="flex justify-between py-1"><span class="text-slate-400">${label}</span><span class="font-semibold ${cls}">${value}</span></div>`;
+
+  $('stmtDoc').innerHTML = `
+    <div class="flex justify-between items-start gap-3 pb-3 border-b border-slate-700">
+      <div><p class="text-xs uppercase tracking-wide text-slate-400">Extrato</p>
+        <h2 class="text-lg font-bold">${esc(s.accountName)}</h2>
+        <p class="text-xs text-slate-400">${fmtDate(s.from)} a ${fmtDate(s.to)}</p></div>
+      <div class="text-right text-xs text-slate-400"><p class="font-semibold">Finanças</p>
+        <p>Gerado em ${new Date(s.generatedAt).toLocaleString('pt-BR')}</p></div>
+    </div>
+    <div class="py-3 text-sm border-b border-slate-700">
+      ${row('Saldo anterior', brl(s.openingBalance))}${row('Entradas', '+ ' + brl(s.totalIn), 'pos text-emerald-400')}
+      ${row('Saídas', '− ' + brl(s.totalOut), 'neg text-red-400')}${row('Saldo final', brl(s.closingBalance))}
+    </div>
+    ${days.length ? days.map((d) => `
+      <div class="pt-4"><p class="text-xs font-semibold uppercase tracking-wide text-slate-400 pb-1">${esc(dayTitle(d.date))}</p>
+        <div class="divide-y divide-slate-800/70">${d.entries.map((e) => stmtEntryHtml(e, s.consolidated)).join('')}</div>
+        ${f === 'all' ? `<div class="flex justify-between text-xs text-slate-400 pt-2 border-t border-slate-800"><span>Saldo do dia</span><span class="font-semibold">${brl(d.closingBalance)}</span></div>` : ''}
+      </div>`).join('') : '<p class="text-sm text-slate-500 text-center py-6">Nenhum lançamento no período.</p>'}
+    ${upcoming.length ? `<div class="pt-5"><p class="text-xs font-semibold uppercase tracking-wide text-amber-400 pb-1">Agendados (ainda não entram no saldo)</p>
+      <div class="divide-y divide-slate-800/70">${upcoming.map((e) => stmtEntryHtml(e, s.consolidated, true)).join('')}</div></div>` : ''}`;
+}
+
+function buildCsv(s) {
+  const q = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const n = (v) => Number(v).toFixed(2).replace('.', ',');
+  const lines = [['"Data"', '"Descrição"', '"Conta"', '"Categoria / transferência"', 'Valor', 'Saldo']];
+  s.days.forEach((d) => d.entries.forEach((e) => lines.push(
+    [q(fmtDate(e.date)), q(e.description), q(e.accountName), q(e.label || e.categoryName || ''), n(e.delta), n(e.balanceAfter)])));
+  return lines.map((l) => l.join(';')).join('\r\n');
+}
+
+$('stAcc').onchange = loadStatement;
+$('stPeriod').onchange = () => { $('stCustom').classList.toggle('hidden', $('stPeriod').value !== 'custom'); loadStatement(); };
+$('stFrom').onchange = $('stTo').onchange = loadStatement;
+document.querySelectorAll('[data-sf]').forEach((b) => (b.onclick = () => {
+  state.stFilter = b.dataset.sf;
+  document.querySelectorAll('[data-sf]').forEach((x) => x.classList.toggle('on', x === b));
+  renderStatement();
+}));
+$('stPrint').onclick = () => window.print();
+$('stCsv').onclick = () => {
+  if (!state.stmt) return;
+  const s = state.stmt;
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob(['\uFEFF' + buildCsv(s)], { type: 'text/csv;charset=utf-8' }));
+  const nome = (s.accountName || 'total').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-');
+  a.download = `extrato-${nome}-${s.from}_${s.to}.csv`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+};
 
 // ---------------------------------------------------------------- login por digital (passkeys / WebAuthn)
 // O servidor manda/recebe binários em base64url; o navegador usa ArrayBuffer. Estas funções convertem.
@@ -429,5 +530,6 @@ if ('serviceWorker' in navigator) navigator.serviceWorker.register('/service-wor
 (async () => {
   $('month').value = currentMonth();
   ['txDate', 'gDate', 'rDate'].forEach((id) => ($(id).value = iso()));
+  $('stFrom').value = iso(new Date(new Date().getFullYear(), new Date().getMonth(), 1)); $('stTo').value = iso();
   (await refresh()) ? showApp() : showAuth();
 })();

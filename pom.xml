@@ -82,6 +82,26 @@
       <groupId>com.yubico</groupId>
       <artifactId>webauthn-server-core</artifactId>
       <version>2.9.0</version>
+      <!-- Usamos os Jackson já gerenciados pelo Spring Boot (evita o conflito de versões/SNAPSHOT no build) -->
+      <exclusions>
+        <exclusion>
+          <groupId>com.fasterxml.jackson.core</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>com.fasterxml.jackson.dataformat</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>com.fasterxml.jackson.datatype</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+    <!-- Necessário para a biblioteca de passkeys ler CBOR; a versão vem do Spring Boot -->
+    <dependency>
+      <groupId>com.fasterxml.jackson.dataformat</groupId>
+      <artifactId>jackson-dataformat-cbor</artifactId>
     </dependency>
 
     <dependency>

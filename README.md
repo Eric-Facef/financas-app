@@ -40,6 +40,7 @@ Cada feature segue: `Controller -> Service -> Repository -> Entity`, com DTOs (`
 | GET, POST, PUT, DELETE | /categories | CRUD de categorias (`?kind=EXPENSE`) |
 | GET, POST, PUT, DELETE | /transactions | `?month=2026-09&type=&categoryId=&accountId=&page=&size=` |
 | POST | /transfers | Transfere entre quaisquer contas (corrente -> poupança e poupança -> corrente), com data |
+| GET | /statements?accountId=&from=2026-10-01&to=2026-10-31 | Extrato com saldo corrido. Sem `accountId` = extrato TOTAL (todas as contas) |
 | GET | /dashboard?month=2026-09 | Saldos, receitas, despesas, sobra e % por categoria |
 | GET | /audit?page=&size= | Histórico de ações do usuário |
 
@@ -116,3 +117,12 @@ Na raiz do projeto, o arquivo `.env` (já no `.gitignore`) é lido automaticamen
 - A passkey fica **presa ao domínio** (`PASSKEY_RP_ID`). Se o endereço do site mudar, cada aparelho precisa cadastrar de novo. Em dev o padrão é `localhost`.
 - Os desafios ficam em memória por 5 minutos (serve para 1 instância).
 - Exige HTTPS (o `localhost` também vale). No iPhone use o Safari; na Android, o Chrome.
+
+## Extrato (aba Extrato)
+
+- `GET /api/v1/statements?accountId=<opcional>&from=AAAA-MM-DD&to=AAAA-MM-DD` (padrão: mês atual; máximo 1 ano).
+- **Por conta:** transferências mexem no saldo ("Para Poupança BB" / "De Nubank"), como num extrato de banco.
+- **Total:** soma todas as contas; transferência entre contas vira uma linha neutra (origem → destino) e não entra em entradas/saídas.
+- Saldo anterior = saldo no fim do dia anterior ao período. Lançamentos com data futura aparecem em **Agendados** e não entram no saldo.
+- O cálculo está em `statement/StatementCalculator` (classe pura, com testes em `StatementCalculatorTest`).
+- Front: filtros Tudo/Entradas/Saídas, **Imprimir / PDF** (impressão do navegador, com estilo próprio de papel) e **Baixar CSV** (separador `;`, abre no Excel em pt-BR).
