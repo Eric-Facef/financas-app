@@ -1,250 +1,280 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-    <title>Finanças</title>
-    <link rel="manifest" href="/manifest.webmanifest">
-    <meta name="theme-color" content="#000000">
-    <link rel="apple-touch-icon" href="/icons/icon-192.png">
-    <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700&display=swap">
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>if(window.tailwind)tailwind.config={theme:{extend:{colors:{slate:{300:"#c9c9d3",400:"#8f8fa0",500:"#6d6d7c",700:"#2b2b37",800:"#1d1d27",900:"#101016"},emerald:{400:"#19ff9c"},red:{400:"#ff4d6d"},cyan:{400:"#00e5ff",500:"#00e5ff"},purple:{400:"#b98cff"},amber:{400:"#ffc233"}}}}}</script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4"></script>
-    <style>
-        :root{--bg:#000;--surface:#0a0a0e;--line:#1d1d27;--line-2:#2b2b37;--text:#f4f4f7;--inc:#19ff9c;--exp:#ff4d6d;--acc:#00e5ff;--sav:#b98cff;--warn:#ffc233}
-        body{background:var(--bg);color:var(--text);font-family:'Sora',system-ui,-apple-system,sans-serif;font-feature-settings:'tnum' 1}
-        :focus-visible{outline:2px solid var(--acc);outline-offset:2px}
-        .card{background:var(--surface);border:1px solid var(--line);border-radius:1rem;padding:1rem}
-        .acc-card{border:1px solid rgba(var(--c-rgb),.35);border-left:4px solid var(--c);background:linear-gradient(135deg,rgba(var(--c-rgb),.14),var(--surface) 62%);box-shadow:0 0 28px -14px var(--c)}
-        .acc-name{color:var(--c);font-weight:600}
-        .dot{width:.65rem;height:.65rem;border-radius:9999px;background:var(--c);box-shadow:0 0 10px var(--c);flex:none}
-        .in{width:100%;background:#06060a;border:1px solid var(--line-2);border-radius:.5rem;padding:.55rem .75rem;font-size:.875rem;color:var(--text)}
-        .in:focus{outline:none;border-color:var(--acc);box-shadow:0 0 0 3px rgba(0,229,255,.18)}
-        .btn{width:100%;border-radius:.6rem;padding:.7rem;font-weight:700;font-size:.875rem;background:var(--acc);color:#001318;transition:filter .15s,box-shadow .15s}
-        .btn:hover{filter:brightness(1.1);box-shadow:0 0 18px -4px rgba(0,229,255,.7)}
-        .btn-p{background:var(--sav);color:#13001f}.btn-p:hover{box-shadow:0 0 18px -4px rgba(185,140,255,.7)}
-        .chip{font-size:.75rem;border:1px solid var(--line-2);border-radius:9999px;padding:.3rem .8rem;color:#c9c9d3}
-        .chip:hover,.chip.on{border-color:var(--acc);color:var(--acc)}.chip.on{background:rgba(0,229,255,.08)}
-        .lbl{display:block;font-size:.75rem;color:#8f8fa0;margin-bottom:.25rem}
-        .tab{padding-bottom:.5rem;border-bottom:2px solid transparent;color:#8f8fa0;white-space:nowrap}
-        .tab.on{border-color:var(--acc);color:var(--acc);font-weight:600;text-shadow:0 0 12px rgba(0,229,255,.45)}
-        .icon-btn{width:2.5rem;height:2.5rem;display:grid;place-items:center;border:1px solid var(--line-2);border-radius:.6rem;color:#c9c9d3}
-        .icon-btn:hover{color:var(--acc);border-color:var(--acc)}
-        .icon-btn[aria-pressed=true]{color:var(--warn);border-color:rgba(255,194,51,.5)}
-        .toast-ok{background:var(--inc);color:#001a0e}.toast-err{background:var(--exp);color:#1a0007}
-        .idle-warn{position:fixed;top:calc(env(safe-area-inset-top,0px) + .75rem);left:50%;transform:translateX(-50%);z-index:50;display:flex;align-items:center;gap:.75rem;background:var(--surface);border:1px solid var(--warn);color:var(--warn);border-radius:.75rem;padding:.5rem .9rem;font-size:.8rem;box-shadow:0 0 24px -8px var(--warn)}
-        input[type=date]{color-scheme:dark}
-        @media (prefers-reduced-motion:reduce){*{transition:none!important}}
-        /* Impressão / PDF: só o extrato, em fundo branco */
-        @media print{
-          body{background:#fff!important}
-          #authView,#toast,#idleWarn,#appView>header,#appView>nav,#appView>section:not(#t-ext),#t-ext .no-print{display:none!important}
-          #appView{padding:0!important;max-width:none!important}
-          .stmt{background:#fff!important;border:none!important;padding:0!important}
-          .stmt *{color:#111!important;border-color:#ccc!important}
-          .stmt .pos{color:#047857!important}
-          .stmt .neg{color:#b91c1c!important}
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Finanças</title>
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#000000">
+  <link rel="apple-touch-icon" href="/icons/icon-192.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700&display=swap">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>if(window.tailwind)tailwind.config={theme:{extend:{colors:{slate:{300:"#c9c9d3",400:"#8f8fa0",500:"#6d6d7c",700:"#2b2b37",800:"#1d1d27",900:"#101016"},emerald:{400:"#19ff9c"},red:{400:"#ff4d6d"},cyan:{400:"#00e5ff",500:"#00e5ff"},purple:{400:"#b98cff"},amber:{400:"#ffc233"}}}}}</script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4"></script>
+  <style>
+    :root{--bg:#000;--surface:#0a0a0e;--line:#1d1d27;--line-2:#2b2b37;--text:#f4f4f7;--inc:#19ff9c;--exp:#ff4d6d;--acc:#00e5ff;--sav:#b98cff;--warn:#ffc233}
+    body{background:var(--bg);color:var(--text);font-family:'Sora',system-ui,-apple-system,sans-serif;font-feature-settings:'tnum' 1}
+    :focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+    .card{background:var(--surface);border:1px solid var(--line);border-radius:1rem;padding:1rem}
+    .acc-card{border:1px solid rgba(var(--c-rgb),.35);border-left:4px solid var(--c);background:linear-gradient(135deg,rgba(var(--c-rgb),.14),var(--surface) 62%);box-shadow:0 0 28px -14px var(--c)}
+    .acc-name{color:var(--c);font-weight:600}
+    .dot{width:.65rem;height:.65rem;border-radius:9999px;background:var(--c);box-shadow:0 0 10px var(--c);flex:none}
+    .in{width:100%;background:#06060a;border:1px solid var(--line-2);border-radius:.5rem;padding:.55rem .75rem;font-size:.875rem;color:var(--text)}
+    .in:focus{outline:none;border-color:var(--acc);box-shadow:0 0 0 3px rgba(0,229,255,.18)}
+    .btn{width:100%;border-radius:.6rem;padding:.7rem;font-weight:700;font-size:.875rem;background:var(--acc);color:#001318;transition:filter .15s,box-shadow .15s}
+    .btn:hover{filter:brightness(1.1);box-shadow:0 0 18px -4px rgba(0,229,255,.7)}
+    .btn-p{background:var(--sav);color:#13001f}.btn-p:hover{box-shadow:0 0 18px -4px rgba(185,140,255,.7)}
+    .chip{font-size:.75rem;border:1px solid var(--line-2);border-radius:9999px;padding:.3rem .8rem;color:#c9c9d3}
+    .chip:hover,.chip.on{border-color:var(--acc);color:var(--acc)}.chip.on{background:rgba(0,229,255,.08)}
+    .lbl{display:block;font-size:.75rem;color:#8f8fa0;margin-bottom:.25rem}
+    .tab{padding-bottom:.5rem;border-bottom:2px solid transparent;color:#8f8fa0;white-space:nowrap}
+    .tab.on{border-color:var(--acc);color:var(--acc);font-weight:600;text-shadow:0 0 12px rgba(0,229,255,.45)}
+    .icon-btn{width:2.5rem;height:2.5rem;display:grid;place-items:center;border:1px solid var(--line-2);border-radius:.6rem;color:#c9c9d3}
+    .icon-btn:hover{color:var(--acc);border-color:var(--acc)}
+    .icon-btn[aria-pressed=true]{color:var(--warn);border-color:rgba(255,194,51,.5)}
+    .note-box{width:1.75rem;height:1.75rem;flex:none;border:2px solid var(--line-2);border-radius:.45rem;display:grid;place-items:center;font-size:.9rem;font-weight:700;color:#001a0e}
+    .note-box:hover{border-color:var(--inc)}.note-box.on{background:var(--inc);border-color:var(--inc)}
+    .toast-ok{background:var(--inc);color:#001a0e}.toast-err{background:var(--exp);color:#1a0007}
+    .idle-warn{position:fixed;top:calc(env(safe-area-inset-top,0px) + .75rem);left:50%;transform:translateX(-50%);z-index:50;display:flex;align-items:center;gap:.75rem;background:var(--surface);border:1px solid var(--warn);color:var(--warn);border-radius:.75rem;padding:.5rem .9rem;font-size:.8rem;box-shadow:0 0 24px -8px var(--warn)}
+    input[type=date]{color-scheme:dark}
+    @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+    /* Impressão / PDF: só o extrato, em fundo branco */
+    @media print{
+      body{background:#fff!important}
+      #authView,#toast,#idleWarn,#appView>header,#appView>nav,#appView>section:not(#t-ext),#t-ext .no-print{display:none!important}
+      #appView{padding:0!important;max-width:none!important}
+      .stmt{background:#fff!important;border:none!important;padding:0!important}
+      .stmt *{color:#111!important;border-color:#ccc!important}
+      .stmt .pos{color:#047857!important}
+      .stmt .neg{color:#b91c1c!important}
+    }
+  </style>
 </head>
 <body class="min-h-screen">
 
-<!-- LOGIN / CADASTRO -->
-<div id="authView" class="hidden fixed inset-0 flex items-center justify-center p-4">
+  <!-- LOGIN / CADASTRO -->
+  <div id="authView" class="hidden fixed inset-0 flex items-center justify-center p-4">
     <form id="authForm" class="card w-full max-w-sm space-y-4">
-        <h1 class="text-xl font-bold text-center" id="authTitle">Entrar</h1>
-        <div><label class="lbl">E-mail</label><input id="email" type="email" required autocomplete="username" class="in"></div>
-        <div><label class="lbl">Senha (mín. 8 caracteres)</label><input id="password" type="password" required minlength="8" autocomplete="current-password" class="in"></div>
-        <p id="authError" class="text-sm text-red-400 hidden"></p>
-        <p id="authNote" class="text-sm text-amber-400 hidden"></p>
-        <button class="btn" id="authSubmit">Entrar</button>
-        <button type="button" id="authToggle" class="w-full text-xs text-cyan-400">Não tem conta? Cadastre-se</button>
-        <div id="pkLoginBox" class="hidden pt-3 border-t border-slate-800">
-            <button type="button" id="pkLogin" class="w-full rounded-lg border border-cyan-500/40 text-cyan-400 py-2.5 text-sm font-semibold hover:bg-cyan-500/10">🔐 Entrar com digital</button>
-        </div>
+      <h1 class="text-xl font-bold text-center" id="authTitle">Entrar</h1>
+      <div><label class="lbl">E-mail</label><input id="email" type="email" required autocomplete="username" class="in"></div>
+      <div><label class="lbl">Senha (mín. 8 caracteres)</label><input id="password" type="password" required minlength="8" autocomplete="current-password" class="in"></div>
+      <p id="authError" class="text-sm text-red-400 hidden"></p>
+      <p id="authNote" class="text-sm text-amber-400 hidden"></p>
+      <button class="btn" id="authSubmit">Entrar</button>
+      <button type="button" id="authToggle" class="w-full text-xs text-cyan-400">Não tem conta? Cadastre-se</button>
+      <div id="pkLoginBox" class="hidden pt-3 border-t border-slate-800">
+        <button type="button" id="pkLogin" class="w-full rounded-lg border border-cyan-500/40 text-cyan-400 py-2.5 text-sm font-semibold hover:bg-cyan-500/10">🔐 Entrar com digital</button>
+      </div>
     </form>
-</div>
+  </div>
 
-<!-- APP -->
-<div id="appView" class="hidden max-w-5xl mx-auto p-4 pb-16 space-y-5">
+  <!-- APP -->
+  <div id="appView" class="hidden max-w-5xl mx-auto p-4 pb-16 space-y-5">
     <header class="flex flex-wrap items-center justify-between gap-2">
-        <div><h1 class="font-bold">Controle Financeiro</h1><p id="userEmail" class="text-xs text-slate-400"></p></div>
-        <div class="flex items-center gap-2">
-            <input id="month" type="month" class="in !w-auto">
-            <button id="eyeBtn" class="icon-btn" aria-label="Ocultar valores" aria-pressed="false" title="Ocultar valores"><svg id="eyeOn" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg><svg id="eyeOff" class="hidden" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.9 17.9A10.9 10.9 0 0 1 12 19C5.5 19 2 12 2 12a18.5 18.5 0 0 1 5.1-5.9M9.9 5.2A9.7 9.7 0 0 1 12 5c6.5 0 10 7 10 7a18.5 18.5 0 0 1-2.2 3.2M14.1 14.1a3 3 0 1 1-4.2-4.2M2 2l20 20"/></svg></button>
-            <button id="installBtn" class="hidden text-xs text-cyan-400 border border-cyan-500/40 rounded-lg px-3 py-2">Instalar</button>
-            <button id="logoutBtn" class="text-xs text-slate-400 hover:text-red-400 px-2">Sair</button>
-        </div>
+      <div><h1 class="font-bold">Controle Financeiro</h1><p id="userEmail" class="text-xs text-slate-400"></p></div>
+      <div class="flex items-center gap-2">
+        <input id="month" type="month" class="in !w-auto">
+        <button id="eyeBtn" class="icon-btn" aria-label="Ocultar valores" aria-pressed="false" title="Ocultar valores"><svg id="eyeOn" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg><svg id="eyeOff" class="hidden" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.9 17.9A10.9 10.9 0 0 1 12 19C5.5 19 2 12 2 12a18.5 18.5 0 0 1 5.1-5.9M9.9 5.2A9.7 9.7 0 0 1 12 5c6.5 0 10 7 10 7a18.5 18.5 0 0 1-2.2 3.2M14.1 14.1a3 3 0 1 1-4.2-4.2M2 2l20 20"/></svg></button>
+        <button id="installBtn" class="hidden text-xs text-cyan-400 border border-cyan-500/40 rounded-lg px-3 py-2">Instalar</button>
+        <button id="logoutBtn" class="text-xs text-slate-400 hover:text-red-400 px-2">Sair</button>
+      </div>
     </header>
 
     <nav class="flex gap-4 text-sm border-b border-slate-800 overflow-x-auto">
-        <button class="tab on" data-tab="dash">Dashboard</button>
-        <button class="tab" data-tab="ext">Extrato</button>
-        <button class="tab" data-tab="poup">Poupança</button>
-        <button class="tab" data-tab="contas">Contas</button>
-        <button class="tab" data-tab="seg">Segurança</button>
-        <button class="tab" data-tab="audit">Auditoria</button>
+      <button class="tab on" data-tab="dash">Dashboard</button>
+      <button class="tab" data-tab="ext">Extrato</button>
+      <button class="tab" data-tab="rel">Relatórios</button>
+      <button class="tab" data-tab="poup">Poupança</button>
+      <button class="tab" data-tab="contas">Contas</button>
+      <button class="tab" data-tab="notas">Notas</button>
+      <button class="tab" data-tab="seg">Segurança</button>
+      <button class="tab" data-tab="audit">Auditoria</button>
     </nav>
 
     <!-- DASHBOARD -->
     <section id="t-dash" class="space-y-5">
-        <div id="summary" class="grid grid-cols-1 sm:grid-cols-2 gap-3"></div>
-        <div id="accGroups" class="space-y-5"></div>
+      <div id="summary" class="grid grid-cols-1 sm:grid-cols-2 gap-3"></div>
+      <div id="accGroups" class="space-y-5"></div>
 
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
-            <form id="txForm" class="card space-y-3">
-                <h2 class="font-semibold">Novo lançamento</h2>
-                <div><label class="lbl">Descrição</label><input id="txDesc" required maxlength="160" class="in" placeholder="Ex.: Supermercado"></div>
-                <div class="grid grid-cols-2 gap-3">
-                    <div><label class="lbl">Valor (R$)</label><input id="txAmount" type="number" step="0.01" min="0.01" required class="in"></div>
-                    <div><label class="lbl">Tipo</label>
-                        <select id="txType" class="in"><option value="EXPENSE">Despesa</option><option value="INCOME">Receita</option></select></div>
-                </div>
-                <div class="grid grid-cols-2 gap-3">
-                    <div><label class="lbl">Categoria</label><select id="txCat" class="in"></select></div>
-                    <div><label class="lbl">Conta</label><select id="txAcc" class="in"></select></div>
-                </div>
-                <div><label class="lbl">Data do lançamento (pode ser passada ou futura)</label><input id="txDate" type="date" required class="in"></div>
-                <button class="btn">Salvar lançamento</button>
-            </form>
-            <div class="card">
-                <div class="flex justify-between mb-2"><h2 class="font-semibold">Despesas por categoria (%)</h2><span id="expTotal" class="text-xs text-slate-400"></span></div>
-                <div class="relative h-60"><canvas id="chart"></canvas></div>
-                <p id="chartEmpty" class="hidden text-center text-sm text-slate-500 pt-20">Sem despesas neste mês.</p>
-            </div>
-        </div>
-
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
+        <form id="txForm" class="card space-y-3">
+          <h2 class="font-semibold">Novo lançamento</h2>
+          <div><label class="lbl">Descrição</label><input id="txDesc" required maxlength="160" class="in" placeholder="Ex.: Supermercado"></div>
+          <div class="grid grid-cols-2 gap-3">
+            <div><label class="lbl">Valor (R$)</label><input id="txAmount" type="number" step="0.01" min="0.01" required class="in"></div>
+            <div><label class="lbl">Tipo</label>
+              <select id="txType" class="in"><option value="EXPENSE">Despesa</option><option value="INCOME">Receita</option></select></div>
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div><label class="lbl">Categoria</label><select id="txCat" class="in"></select></div>
+            <div><label class="lbl">Conta</label><select id="txAcc" class="in"></select></div>
+          </div>
+          <div><label class="lbl">Data do lançamento (pode ser passada ou futura)</label><input id="txDate" type="date" required class="in"></div>
+          <button class="btn">Salvar lançamento</button>
+        </form>
         <div class="card">
-            <h2 class="font-semibold mb-3">Lançamentos do mês</h2>
-            <div id="txList" class="space-y-2 max-h-96 overflow-y-auto"></div>
+          <h2 class="font-semibold mb-3">Lançamentos do mês</h2>
+          <div id="txList" class="space-y-2 max-h-[32rem] overflow-y-auto"></div>
         </div>
+      </div>
     </section>
 
     <!-- EXTRATO -->
     <section id="t-ext" class="hidden space-y-4">
-        <div class="card no-print grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div><label class="lbl">Extrato de</label><select id="stAcc" class="in"><option value="">Total (todas as contas)</option></select></div>
-            <div><label class="lbl">Período</label>
-                <select id="stPeriod" class="in">
-                    <option value="month">Este mês</option><option value="prev">Mês passado</option>
-                    <option value="30">Últimos 30 dias</option><option value="custom">Personalizado</option>
-                </select></div>
-            <div id="stCustom" class="hidden grid grid-cols-2 gap-3 sm:col-span-2">
-                <div><label class="lbl">De</label><input id="stFrom" type="date" class="in"></div>
-                <div><label class="lbl">Até</label><input id="stTo" type="date" class="in"></div>
-            </div>
+      <div class="card no-print grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div><label class="lbl">Extrato de</label><select id="stAcc" class="in"><option value="">Total (todas as contas)</option></select></div>
+        <div><label class="lbl">Período</label>
+          <select id="stPeriod" class="in">
+            <option value="month">Este mês</option><option value="prev">Mês passado</option>
+            <option value="30">Últimos 30 dias</option><option value="custom">Personalizado</option>
+          </select></div>
+        <div id="stCustom" class="hidden grid grid-cols-2 gap-3 sm:col-span-2">
+          <div><label class="lbl">De</label><input id="stFrom" type="date" class="in"></div>
+          <div><label class="lbl">Até</label><input id="stTo" type="date" class="in"></div>
         </div>
-        <div class="no-print flex flex-wrap items-center justify-between gap-2">
-            <div class="flex gap-2">
-                <button class="chip on" data-sf="all">Tudo</button>
-                <button class="chip" data-sf="in">Entradas</button>
-                <button class="chip" data-sf="out">Saídas</button>
-            </div>
-            <div class="flex gap-2">
-                <button id="stCsv" class="chip">Baixar CSV</button>
-                <button id="stPrint" class="chip">Imprimir / PDF</button>
-            </div>
+      </div>
+      <div class="no-print flex flex-wrap items-center justify-between gap-2">
+        <div class="flex gap-2">
+          <button class="chip on" data-sf="all">Tudo</button>
+          <button class="chip" data-sf="in">Entradas</button>
+          <button class="chip" data-sf="out">Saídas</button>
         </div>
-        <article id="stmtDoc" class="stmt card"></article>
+        <div class="flex gap-2">
+          <button id="stCsv" class="chip">Baixar CSV</button>
+          <button id="stPrint" class="chip">Imprimir / PDF</button>
+        </div>
+      </div>
+      <article id="stmtDoc" class="stmt card"></article>
+    </section>
+
+    <!-- RELATÓRIOS -->
+    <section id="t-rel" class="hidden space-y-5">
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
+        <div class="card">
+          <div class="flex flex-wrap items-start justify-between gap-3">
+            <div><h2 class="font-semibold">Gasto por dia da semana</h2><p id="wdSub" class="text-xs text-slate-500"></p></div>
+            <div class="flex gap-2"><button class="chip on" data-wd="total">Total</button><button class="chip" data-wd="avg">Média por dia</button></div>
+          </div>
+          <p id="wdTop" class="text-sm text-slate-300 my-3 min-h-[1.25rem]"></p>
+          <div class="relative h-60"><canvas id="wdChart"></canvas></div>
+          <p id="wdEmpty" class="hidden text-center text-sm text-slate-500 pt-20">Sem despesas neste mês.</p>
+        </div>
+        <div class="card">
+          <div class="flex justify-between mb-2"><h2 class="font-semibold">Despesas por categoria (%)</h2><span id="expTotal" class="text-xs text-slate-400"></span></div>
+          <div class="relative h-60"><canvas id="chart"></canvas></div>
+          <p id="chartEmpty" class="hidden text-center text-sm text-slate-500 pt-20">Sem despesas neste mês.</p>
+        </div>
+      </div>
     </section>
 
     <!-- POUPANÇA -->
     <section id="t-poup" class="hidden space-y-5">
-        <div id="savCards" class="grid grid-cols-1 sm:grid-cols-3 gap-3"></div>
+      <div id="savCards" class="grid grid-cols-1 sm:grid-cols-3 gap-3"></div>
 
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
-            <form id="gForm" class="card space-y-3">
-                <h2 class="font-semibold">Guardar na poupança</h2>
-                <div class="flex justify-between items-center bg-slate-900/60 rounded-xl p-3">
-                    <div><p class="text-xs text-slate-400">Sobra disponível no mês</p><p id="leftover" class="text-xl font-bold text-purple-400"></p></div>
-                    <button type="button" id="gAll" class="chip">Usar a sobra</button>
-                </div>
-                <div class="grid grid-cols-2 gap-3">
-                    <div><label class="lbl">Sai da conta</label><select id="gFrom" class="in"></select></div>
-                    <div><label class="lbl">Vai para</label><select id="gTo" class="in"></select></div>
-                </div>
-                <div class="grid grid-cols-2 gap-3">
-                    <div><label class="lbl">Valor (R$)</label><input id="gAmount" type="number" step="0.01" min="0.01" required class="in"></div>
-                    <div><label class="lbl">Data</label><input id="gDate" type="date" required class="in"></div>
-                </div>
-                <div><label class="lbl">Meta / descrição</label><input id="gDesc" maxlength="160" value="Reserva de emergência" class="in"></div>
-                <button class="btn btn-p">Guardar</button>
-            </form>
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <form id="gForm" class="card space-y-3">
+          <h2 class="font-semibold">Guardar na poupança</h2>
+          <div class="flex justify-between items-center bg-slate-900/60 rounded-xl p-3">
+            <div><p class="text-xs text-slate-400">Sobra disponível no mês</p><p id="leftover" class="text-xl font-bold text-purple-400"></p></div>
+            <button type="button" id="gAll" class="chip">Usar a sobra</button>
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div><label class="lbl">Sai da conta</label><select id="gFrom" class="in"></select></div>
+            <div><label class="lbl">Vai para</label><select id="gTo" class="in"></select></div>
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div><label class="lbl">Valor (R$)</label><input id="gAmount" type="number" step="0.01" min="0.01" required class="in"></div>
+            <div><label class="lbl">Data</label><input id="gDate" type="date" required class="in"></div>
+          </div>
+          <div><label class="lbl">Meta / descrição</label><input id="gDesc" maxlength="160" value="Reserva de emergência" class="in"></div>
+          <button class="btn btn-p">Guardar</button>
+        </form>
 
-            <form id="rForm" class="card space-y-3">
-                <h2 class="font-semibold">Devolver para a conta corrente</h2>
-                <div class="flex justify-between items-center bg-slate-900/60 rounded-xl p-3">
-                    <div><p class="text-xs text-slate-400">Saldo da poupança selecionada</p><p id="rBalance" class="text-xl font-bold text-purple-400"></p></div>
-                    <button type="button" id="rAll" class="chip">Devolver tudo</button>
-                </div>
-                <div class="grid grid-cols-2 gap-3">
-                    <div><label class="lbl">Sai da poupança</label><select id="rFrom" class="in"></select></div>
-                    <div><label class="lbl">Vai para</label><select id="rTo" class="in"></select></div>
-                </div>
-                <div class="grid grid-cols-2 gap-3">
-                    <div><label class="lbl">Valor (R$)</label><input id="rAmount" type="number" step="0.01" min="0.01" required class="in"></div>
-                    <div><label class="lbl">Data</label><input id="rDate" type="date" required class="in"></div>
-                </div>
-                <div><label class="lbl">Descrição</label><input id="rDesc" maxlength="160" value="Resgate da poupança" class="in"></div>
-                <button class="btn">Devolver</button>
-            </form>
-        </div>
+        <form id="rForm" class="card space-y-3">
+          <h2 class="font-semibold">Devolver para a conta corrente</h2>
+          <div class="flex justify-between items-center bg-slate-900/60 rounded-xl p-3">
+            <div><p class="text-xs text-slate-400">Saldo da poupança selecionada</p><p id="rBalance" class="text-xl font-bold text-purple-400"></p></div>
+            <button type="button" id="rAll" class="chip">Devolver tudo</button>
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div><label class="lbl">Sai da poupança</label><select id="rFrom" class="in"></select></div>
+            <div><label class="lbl">Vai para</label><select id="rTo" class="in"></select></div>
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div><label class="lbl">Valor (R$)</label><input id="rAmount" type="number" step="0.01" min="0.01" required class="in"></div>
+            <div><label class="lbl">Data</label><input id="rDate" type="date" required class="in"></div>
+          </div>
+          <div><label class="lbl">Descrição</label><input id="rDesc" maxlength="160" value="Resgate da poupança" class="in"></div>
+          <button class="btn">Devolver</button>
+        </form>
+      </div>
     </section>
 
     <!-- CONTAS -->
     <section id="t-contas" class="hidden grid grid-cols-1 lg:grid-cols-2 gap-5">
-        <div class="card space-y-3">
-            <h2 class="font-semibold">Minhas contas</h2>
-            <div id="accList" class="space-y-2"></div>
+      <div class="card space-y-3">
+        <h2 class="font-semibold">Minhas contas</h2>
+        <div id="accList" class="space-y-2"></div>
+      </div>
+      <form id="accForm" class="card space-y-3 self-start">
+        <h2 class="font-semibold" id="accFormTitle">Adicionar conta</h2>
+        <div id="presets" class="flex flex-wrap gap-2">
+          <button type="button" class="chip" data-preset="santander">Santander</button>
+          <button type="button" class="chip" data-preset="nubank">Nubank</button>
+          <button type="button" class="chip" data-preset="bb">Banco do Brasil</button>
+          <button type="button" class="chip" data-preset="bbp">Poupança BB</button>
         </div>
-        <form id="accForm" class="card space-y-3 self-start">
-            <h2 class="font-semibold" id="accFormTitle">Adicionar conta</h2>
-            <div id="presets" class="flex flex-wrap gap-2">
-                <button type="button" class="chip" data-preset="santander">Santander</button>
-                <button type="button" class="chip" data-preset="nubank">Nubank</button>
-                <button type="button" class="chip" data-preset="bb">Banco do Brasil</button>
-                <button type="button" class="chip" data-preset="bbp">Poupança BB</button>
-            </div>
-            <div><label class="lbl">Nome da conta</label><input id="accName" required maxlength="80" class="in" placeholder="Ex.: Santander"></div>
-            <div class="grid grid-cols-2 gap-3">
-                <div><label class="lbl">Tipo</label>
-                    <select id="accType" class="in"><option value="CHECKING">Conta corrente</option><option value="SAVINGS">Poupança</option></select></div>
-                <div><label class="lbl">Saldo atual (R$)</label><input id="accInitial" type="number" step="0.01" class="in" placeholder="0,00"></div>
-            </div>
-            <button class="btn" id="accSubmit">Adicionar conta</button>
-            <button type="button" id="accCancel" class="hidden w-full text-xs text-slate-400">Cancelar edição</button>
-        </form>
+        <div><label class="lbl">Nome da conta</label><input id="accName" required maxlength="80" class="in" placeholder="Ex.: Santander"></div>
+        <div class="grid grid-cols-2 gap-3">
+          <div><label class="lbl">Tipo</label>
+            <select id="accType" class="in"><option value="CHECKING">Conta corrente</option><option value="SAVINGS">Poupança</option></select></div>
+          <div><label class="lbl">Saldo atual (R$)</label><input id="accInitial" type="number" step="0.01" class="in" placeholder="0,00"></div>
+        </div>
+        <button class="btn" id="accSubmit">Adicionar conta</button>
+        <button type="button" id="accCancel" class="hidden w-full text-xs text-slate-400">Cancelar edição</button>
+      </form>
+    </section>
+
+    <!-- NOTAS -->
+    <section id="t-notas" class="hidden max-w-xl space-y-4">
+      <form id="noteForm" class="card flex gap-2">
+        <input id="noteText" required maxlength="300" autocomplete="off" aria-label="Nova nota" class="in" placeholder="Ex.: dar R$ 7 para a mãe">
+        <button class="btn !w-auto px-4 whitespace-nowrap">Adicionar</button>
+      </form>
+      <div class="card space-y-3">
+        <div id="noteList" class="space-y-2"></div>
+        <button id="noteClear" class="hidden chip"></button>
+      </div>
     </section>
 
     <!-- SEGURANÇA -->
     <section id="t-seg" class="hidden space-y-5 max-w-lg">
-        <div class="card space-y-3">
-            <h2 class="font-semibold">Login por digital / rosto</h2>
-            <p class="text-sm text-slate-400">Use a digital, o rosto ou o PIN do celular para entrar sem digitar a senha. Cadastre cada aparelho que você usa.</p>
-            <div id="pkList" class="space-y-2"></div>
-            <button id="pkAdd" class="btn">Ativar neste aparelho</button>
-            <p id="pkUnsupported" class="hidden text-xs text-amber-400">Este navegador não suporta login por digital.</p>
-        </div>
-        <div class="card space-y-3">
-            <h2 class="font-semibold">Sair automaticamente</h2>
-            <p class="text-sm text-slate-400">Encerra a sessão quando você fica um tempo sem mexer no app. Depois é só entrar de novo com a digital.</p>
-            <select id="idleSel" class="in"><option value="0">Nunca</option><option value="1">Após 1 minuto</option><option value="2">Após 2 minutos</option><option value="5">Após 5 minutos</option><option value="10">Após 10 minutos</option><option value="15">Após 15 minutos</option><option value="30">Após 30 minutos</option></select>
-        </div>
+      <div class="card space-y-3">
+        <h2 class="font-semibold">Login por digital / rosto</h2>
+        <p class="text-sm text-slate-400">Use a digital, o rosto ou o PIN do celular para entrar sem digitar a senha. Cadastre cada aparelho que você usa.</p>
+        <div id="pkList" class="space-y-2"></div>
+        <button id="pkAdd" class="btn">Ativar neste aparelho</button>
+        <p id="pkUnsupported" class="hidden text-xs text-amber-400">Este navegador não suporta login por digital.</p>
+      </div>
+      <div class="card space-y-3">
+        <h2 class="font-semibold">Sair automaticamente</h2>
+        <p class="text-sm text-slate-400">Encerra a sessão quando você fica um tempo sem mexer no app. Depois é só entrar de novo com a digital.</p>
+        <select id="idleSel" class="in"><option value="0">Nunca</option><option value="1">Após 1 minuto</option><option value="2">Após 2 minutos</option><option value="5">Após 5 minutos</option><option value="10">Após 10 minutos</option><option value="15">Após 15 minutos</option><option value="30">Após 30 minutos</option></select>
+      </div>
     </section>
 
     <!-- AUDITORIA -->
     <section id="t-audit" class="hidden card overflow-x-auto">
-        <table class="w-full text-xs text-left">
-            <thead class="text-slate-400"><tr><th class="p-2">Data/hora</th><th class="p-2">Ação</th><th class="p-2">Entidade</th><th class="p-2">Detalhes</th></tr></thead>
-            <tbody id="auditBody" class="divide-y divide-slate-800/60"></tbody>
-        </table>
+      <table class="w-full text-xs text-left">
+        <thead class="text-slate-400"><tr><th class="p-2">Data/hora</th><th class="p-2">Ação</th><th class="p-2">Entidade</th><th class="p-2">Detalhes</th></tr></thead>
+        <tbody id="auditBody" class="divide-y divide-slate-800/60"></tbody>
+      </table>
     </section>
-</div>
+  </div>
 
-<div id="idleWarn" class="hidden idle-warn" role="alert"><span id="idleMsg"></span><button id="idleStay" class="chip on">Continuar</button></div>
-<div id="toast" class="hidden fixed bottom-4 left-1/2 -translate-x-1/2 px-4 py-2 rounded-lg text-sm shadow-lg"></div>
-<script src="/app.js"></script>
+  <div id="idleWarn" class="hidden idle-warn" role="alert"><span id="idleMsg"></span><button id="idleStay" class="chip on">Continuar</button></div>
+  <div id="toast" class="hidden fixed bottom-4 left-1/2 -translate-x-1/2 px-4 py-2 rounded-lg text-sm shadow-lg"></div>
+  <script src="/app.js"></script>
 </body>
 </html>

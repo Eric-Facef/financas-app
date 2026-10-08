@@ -5,7 +5,7 @@
 // Para outro endereço, defina window.API_BASE antes de carregar este arquivo.
 const DEV_PORTS = ['5500', '5501', '5173'];
 const API = window.API_BASE ?? (DEV_PORTS.includes(location.port) ? `http://${location.hostname}:8080` : '');
-const state = { token: null, accounts: [], categories: [], dash: null, chart: null, registering: false, editingAcc: null, stmt: null, stFilter: 'all', txs: [], hidden: false, printing: false };
+const state = { token: null, accounts: [], categories: [], dash: null, chart: null, registering: false, editingAcc: null, stmt: null, stFilter: 'all', txs: [], hidden: false, printing: false, notes: [], wd: null, wdChart: null, wdMode: 'total', editingNote: null };
 
 const store = {
   get: (k, d = null) => { try { return localStorage.getItem(k) ?? d; } catch { return d; } },
@@ -76,10 +76,11 @@ function refresh() {
 
 function showAuth(note) {
   state.token = null;
-  Object.assign(state, { dash: null, accounts: [], txs: [], stmt: null });
+  Object.assign(state, { dash: null, accounts: [], txs: [], stmt: null, notes: [], wd: null, editingNote: null });
   state.chart?.destroy(); state.chart = null;
-  ['summary', 'accGroups', 'txList', 'stmtDoc', 'savCards', 'accList', 'auditBody', 'pkList', 'txCat', 'txAcc', 'gFrom', 'gTo', 'rFrom', 'rTo', 'stAcc'].forEach((id) => ($(id).innerHTML = ''));
-  ['leftover', 'rBalance', 'expTotal'].forEach((id) => ($(id).textContent = ''));
+  state.wdChart?.destroy(); state.wdChart = null;
+  ['summary', 'accGroups', 'txList', 'stmtDoc', 'savCards', 'accList', 'auditBody', 'pkList', 'txCat', 'txAcc', 'gFrom', 'gTo', 'rFrom', 'rTo', 'stAcc', 'noteList'].forEach((id) => ($(id).innerHTML = ''));
+  ['leftover', 'rBalance', 'expTotal', 'wdTop', 'wdSub'].forEach((id) => ($(id).textContent = ''));
   $('appView').classList.add('hidden');
   $('authView').classList.remove('hidden');
   $('authNote').textContent = note || ''; $('authNote').classList.toggle('hidden', !note);
@@ -131,14 +132,16 @@ async function load() {
   if (!/^\d{4}-\d{2}$/.test($('month').value)) $('month').value = currentMonth();
   const month = $('month').value;
   try {
-    const [dash, cats, txs, audit] = await Promise.all([
+    const [dash, cats, txs, audit, wd, notes] = await Promise.all([
       api(`/dashboard?month=${month}`),
       api('/categories'),
       api(`/transactions?month=${month}&size=100`),
       api('/audit?size=50'),
+      api(`/reports/weekday?month=${month}`).catch(() => null),
+      api('/notes').catch(() => null),
     ]);
-    Object.assign(state, { dash, accounts: dash.accounts, categories: cats, txs: txs.content });
-    renderAccounts(); renderChart(); renderSelects(); renderTransactions(state.txs); renderAudit(audit.content); renderSavings(); renderAccountsTab();
+    Object.assign(state, { dash, accounts: dash.accounts, categories: cats, txs: txs.content, wd, notes: notes ?? state.notes });
+    renderAccounts(); renderChart(); renderSelects(); renderTransactions(state.txs); renderAudit(audit.content); renderSavings(); renderAccountsTab(); renderWeekday(); renderNotes();
   } catch (err) { toast(err.message, true); }
 }
 
@@ -340,11 +343,134 @@ $('accForm').onsubmit = async (e) => {
 
 function setTab(name) {
   document.querySelectorAll('.tab').forEach((b) => b.classList.toggle('on', b.dataset.tab === name));
-  ['dash', 'ext', 'poup', 'contas', 'seg', 'audit'].forEach((t) => $(`t-${t}`).classList.toggle('hidden', t !== name));
+  ['dash', 'ext', 'rel', 'poup', 'contas', 'notas', 'seg', 'audit'].forEach((t) => $(`t-${t}`).classList.toggle('hidden', t !== name));
   if (name === 'seg') loadPasskeys();
   if (name === 'ext') loadStatement();
+  if (name === 'rel') { renderChart(); renderWeekday(); }   // gráficos recriados já com a aba visível (tamanho certo)
+  if (name === 'notas') loadNotes();
 }
 document.querySelectorAll('.tab').forEach((b) => (b.onclick = () => setTab(b.dataset.tab)));
+
+// ---------------------------------------------------------------- relatório: gasto por dia da semana
+const WD = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo'];
+
+function renderWeekday() {
+  const r = state.wd;
+  state.wdChart?.destroy(); state.wdChart = null;
+  const empty = !r || Number(r.total) === 0;
+  $('wdEmpty').textContent = r ? 'Sem despesas neste mês.' : 'Relatório indisponível no momento.';
+  $('wdEmpty').classList.toggle('hidden', !empty);
+  $('wdChart').classList.toggle('hidden', empty);
+  $('wdTop').textContent = '';
+  $('wdSub').textContent = '';
+  if (r) {
+    const [y, m] = r.month.split('-').map(Number);
+    const label = new Date(y, m - 1, 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+    $('wdSub').textContent = `${label} · até ${fmtDate(r.until)}`;
+  }
+  if (empty) return;
+
+  const avg = state.wdMode === 'avg';
+  const vals = r.days.map((d) => Number(avg ? d.average : d.total));
+  const top = vals.indexOf(Math.max(...vals));
+  const d = r.days[top];
+  $('wdTop').textContent = `Dia com mais gastos: ${WD[top]}, ${brl(vals[top])}`
+    + (avg ? ' em média por dia.' : ` em ${d.entries} lançamento${d.entries === 1 ? '' : 's'}.`);
+
+  state.wdChart = new Chart($('wdChart'), {
+    type: 'bar',
+    data: { labels: WD.map((n) => n.slice(0, 3)), datasets: [{ data: vals, borderRadius: 6,
+      backgroundColor: vals.map((_, i) => (i === top ? '#ff4d6d' : 'rgba(255,77,109,.35)')) }] },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: (c) => ` ${brl(c.raw)}` } } },
+      scales: {
+        x: { grid: { display: false }, ticks: { color: '#a1a1b0' } },
+        y: { beginAtZero: true, grid: { color: '#1d1d27' },
+          ticks: { color: '#8f8fa0', callback: (v) => (state.hidden ? '' : Number(v).toLocaleString('pt-BR')) } },
+      },
+    },
+  });
+}
+
+document.querySelectorAll('[data-wd]').forEach((b) => (b.onclick = () => {
+  state.wdMode = b.dataset.wd;
+  document.querySelectorAll('[data-wd]').forEach((x) => x.classList.toggle('on', x === b));
+  renderWeekday();
+}));
+
+// ---------------------------------------------------------------- notas (lembretes soltos)
+function renderNotes() {
+  const pending = state.notes.filter((n) => !n.done).length, done = state.notes.length - pending;
+  document.querySelector('[data-tab=notas]').textContent = pending ? `Notas (${pending})` : 'Notas';
+  $('noteClear').classList.toggle('hidden', done === 0);
+  $('noteClear').textContent = `Apagar feitas (${done})`;
+  $('noteList').innerHTML = state.notes.length ? state.notes.map((n) => `
+    <div class="flex items-center gap-3 p-3 rounded-xl bg-slate-900/60 border border-slate-800">
+      <button data-ndone="${esc(n.id)}" role="checkbox" aria-checked="${n.done}" aria-label="Marcar como feita" class="note-box ${n.done ? 'on' : ''}">${n.done ? '✓' : ''}</button>
+      ${state.editingNote === n.id
+        ? `<input data-nedit="${esc(n.id)}" class="in flex-1" maxlength="300" aria-label="Editar nota" value="${esc(n.text)}">`
+        : `<p data-ntext="${esc(n.id)}" class="flex-1 text-sm break-words cursor-text ${n.done ? 'line-through text-slate-500' : ''}">${esc(n.text)}</p>`}
+      <button data-ndel="${esc(n.id)}" class="text-slate-500 hover:text-red-400 px-1" aria-label="Excluir nota">✕</button></div>`).join('')
+    : '<p class="text-sm text-slate-500 text-center py-4">Nenhuma nota. Escreva um lembrete acima, por exemplo: dar R$ 7 para a mãe.</p>';
+  $('noteList').querySelector('[data-nedit]')?.focus();
+}
+
+async function loadNotes() {
+  try { state.notes = await api('/notes'); renderNotes(); }
+  catch (err) { toast(err.message, true); }
+}
+
+$('noteForm').onsubmit = async (e) => {
+  e.preventDefault();
+  const text = $('noteText').value.trim();
+  if (!text) return;
+  try {
+    await api('/notes', { method: 'POST', body: { text } });
+    $('noteText').value = '';
+    await loadNotes();
+  } catch (err) { toast(err.message, true); }
+};
+
+$('noteList').onclick = async (e) => {
+  const t = e.target.closest('[data-ndone],[data-ndel],[data-ntext]');
+  if (!t) return;
+  try {
+    if (t.dataset.ndone) {
+      const n = state.notes.find((x) => x.id === t.dataset.ndone);
+      n.done = !n.done; renderNotes();   // marca na hora; a lista é recarregada em seguida (feitas vão para o fim)
+      await api(`/notes/${n.id}`, { method: 'PUT', body: { text: n.text, done: n.done } });
+      await loadNotes();
+    } else if (t.dataset.ndel) {
+      await api(`/notes/${t.dataset.ndel}`, { method: 'DELETE' });
+      await loadNotes();
+    } else {
+      state.editingNote = t.dataset.ntext; renderNotes();
+    }
+  } catch (err) { toast(err.message, true); await loadNotes(); }
+};
+
+async function saveNoteEdit(input) {
+  const id = input.dataset.nedit;
+  if (state.editingNote !== id) return;   // já cancelado/salvo (o blur dispara de novo ao remover o campo)
+  state.editingNote = null;
+  const n = state.notes.find((x) => x.id === id), text = input.value.trim();
+  if (!n || !text || text === n.text) return renderNotes();
+  try { await api(`/notes/${id}`, { method: 'PUT', body: { text, done: n.done } }); await loadNotes(); }
+  catch (err) { toast(err.message, true); renderNotes(); }
+}
+$('noteList').addEventListener('focusout', (e) => { if (e.target.dataset?.nedit) saveNoteEdit(e.target); });
+$('noteList').addEventListener('keydown', (e) => {
+  if (!e.target.dataset?.nedit) return;
+  if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); }                 // o blur salva
+  if (e.key === 'Escape') { state.editingNote = null; renderNotes(); }           // cancela sem salvar
+});
+
+$('noteClear').onclick = async () => {
+  if (!confirm('Apagar todas as notas marcadas como feitas?')) return;
+  try { await api('/notes/done', { method: 'DELETE' }); toast('Notas feitas apagadas'); await loadNotes(); }
+  catch (err) { toast(err.message, true); }
+};
 
 // ---------------------------------------------------------------- extrato (por conta ou total)
 const dayTitle = (s) => {
@@ -542,13 +668,209 @@ function setHidden(v) {
   state.hidden = v; store.set('fin.hide', v ? '1' : '0');
   $('eyeBtn').setAttribute('aria-pressed', String(v));
   $('eyeOn').classList.toggle('hidden', v); $('eyeOff').classList.toggle('hidden', !v);
-  if (state.dash) { renderAccounts(); renderChart(); renderSelects(); renderTransactions(state.txs); renderSavings(); renderAccountsTab(); renderStatement(); }
+  if (state.dash) { renderAccounts(); renderChart(); renderSelects(); renderTransactions(state.txs); renderSavings(); renderAccountsTab(); renderStatement(); renderWeekday(); }
 }
 $('eyeBtn').onclick = () => setHidden(!state.hidden);
 setHidden(state.hidden);
 // o extrato impresso / em PDF sempre sai com os valores
 window.addEventListener('beforeprint', () => { state.printing = true; renderStatement(); });
 window.addEventListener('afterprint', () => { state.printing = false; renderStatement(); });
+
+// ---------------------------------------------------------------- relatórios extras (aba Relatórios)
+// Bloco independente: só lê a API (/reports/...) e desenha em cards próprios dentro de #t-rel.
+// Não altera os gráficos "dia da semana" e "categorias (%)" acima.
+const rep = { data: null, charts: {}, seq: 0 };
+const MES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+const monthLabel = (ym) => `${MES[Number(ym.slice(5, 7)) - 1]}/${ym.slice(2, 4)}`;
+const axisMoney = (v) => (state.hidden ? '' : Number(v).toLocaleString('pt-BR'));
+const repVisible = () => !$('t-rel').classList.contains('hidden');
+const signed = (v) => `${v >= 0 ? '+' : '−'} ${brl(Math.abs(v))}`;
+
+const REP_CARDS = [
+  ['rpPace', 'Ritmo de gastos no mês', 'Despesa acumulada dia a dia, comparada ao mês anterior'],
+  ['rpMonthly', 'Receitas × despesas', 'Últimos 6 meses, com a sobra de cada mês'],
+  ['rpCats', 'Categorias: mês × mês anterior', 'As 8 maiores despesas; o resto soma em "Outras"'],
+  ['rpNet', 'Evolução do saldo', 'Saldo no fim de cada mês (últimos 12), contas e poupança'],
+];
+
+$('t-rel').insertAdjacentHTML('beforeend', `<div class="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">${REP_CARDS.map(([id, title, hint]) => `
+  <div class="card">
+    <h2 class="font-semibold">${title}</h2>
+    <p class="text-xs text-slate-500">${hint}</p>
+    <p id="${id}Top" class="text-sm text-slate-300 my-3 min-h-[1.25rem]"></p>
+    <div id="${id}Box" class="relative" style="height:240px">
+      <canvas id="${id}Cv"></canvas>
+      <div id="${id}Empty" class="hidden absolute inset-0"><p class="h-full flex items-center justify-center text-center text-sm text-slate-500"></p></div>
+    </div>
+  </div>`).join('')}</div>`);
+
+function repClear() {
+  Object.values(rep.charts).forEach((c) => c?.destroy());
+  rep.charts = {};
+  REP_CARDS.forEach(([id]) => { $(`${id}Top`).textContent = ''; });
+}
+
+// Prepara o card: apaga o gráfico anterior e mostra o texto de "vazio" quando não há o que desenhar.
+function repPrep(id, { ok, empty, top = '', height = 240 }) {
+  rep.charts[id]?.destroy(); rep.charts[id] = null;
+  $(`${id}Top`).textContent = ok ? top : '';
+  $(`${id}Box`).style.height = `${height}px`;
+  $(`${id}Cv`).classList.toggle('hidden', !ok);
+  $(`${id}Empty`).classList.toggle('hidden', ok);
+  $(`${id}Empty`).firstElementChild.textContent = empty;
+  return ok;
+}
+
+const repBase = () => ({
+  responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+  plugins: { legend: { position: 'bottom', labels: { color: '#a1a1b0', font: { size: 11 }, boxWidth: 12 } },
+    tooltip: { callbacks: { label: (c) => ` ${c.dataset.label}: ${brl(c.raw)}` } } },
+});
+const repGrid = { color: '#1d1d27' };
+const repTicks = { color: '#8f8fa0' };
+
+// Linha: o acumulado do mês é uma série contínua; o mês anterior serve de régua.
+function renderPace() {
+  const r = rep.data.pace;
+  const cur = r ? Number(r.currentTotal) : 0, prevSame = r ? Number(r.previousSamePoint) : 0;
+  let top = '';
+  if (r && r.elapsedDays > 0) {
+    const pct = prevSame > 0 ? ` (${cur >= prevSame ? '+' : '−'}${Math.abs(Math.round(((cur - prevSame) / prevSame) * 100))}%)` : '';
+    top = `Até o dia ${r.elapsedDays}: ${brl(cur)}. No mês anterior, até o mesmo dia: ${brl(prevSame)}${pct}.`;
+  }
+  if (!repPrep('rpPace', { ok: !!r && (cur > 0 || Number(r.previousTotal) > 0), top,
+    empty: r ? 'Sem despesas neste mês nem no anterior.' : 'Relatório indisponível no momento.' })) return;
+
+  const days = Math.max(r.daysInMonth, r.previous.length);
+  rep.charts.rpPace = new Chart($('rpPaceCv'), {
+    type: 'line',
+    data: {
+      labels: Array.from({ length: days }, (_, i) => String(i + 1)),
+      datasets: [
+        { label: monthLabel(r.month), data: r.current.map(Number), borderColor: '#ff4d6d', backgroundColor: 'rgba(255,77,109,.12)',
+          fill: true, tension: 0.25, borderWidth: 2.5, pointRadius: 0, pointHoverRadius: 4 },
+        { label: monthLabel(r.previousMonth), data: r.previous.map(Number), borderColor: '#8f8fa0', borderDash: [6, 4],
+          fill: false, tension: 0.25, borderWidth: 2, pointRadius: 0, pointHoverRadius: 4 },
+      ],
+    },
+    options: { ...repBase(),
+      plugins: { ...repBase().plugins, tooltip: { callbacks: { title: (i) => `Dia ${i[0].label}`, label: (c) => ` ${c.dataset.label}: ${brl(c.raw)}` } } },
+      scales: { x: { grid: { display: false }, ticks: { ...repTicks, maxTicksLimit: 10 } },
+        y: { beginAtZero: true, grid: repGrid, ticks: { ...repTicks, callback: axisMoney } } } },
+  });
+}
+
+// Barras agrupadas (comparar meses lado a lado) + linha para a sobra (resultado).
+function renderMonthly() {
+  const r = rep.data.monthly;
+  const pts = r?.months ?? [];
+  const avg = pts.length ? pts.reduce((s, p) => s + Number(p.leftover), 0) / pts.length : 0;
+  const red = pts.filter((p) => Number(p.leftover) < 0).length;
+  const top = `Sobra média de ${brl(avg)} por mês` + (red ? `; ${red} ${red === 1 ? 'mês' : 'meses'} no vermelho.` : '.');
+  if (!repPrep('rpMonthly', { ok: pts.some((p) => Number(p.income) > 0 || Number(p.expenses) > 0), top,
+    empty: r ? 'Sem lançamentos nestes meses.' : 'Relatório indisponível no momento.' })) return;
+
+  rep.charts.rpMonthly = new Chart($('rpMonthlyCv'), {
+    type: 'bar',
+    data: {
+      labels: pts.map((p) => monthLabel(p.month)),
+      datasets: [
+        { type: 'line', label: 'Sobra', data: pts.map((p) => Number(p.leftover)), borderColor: '#b98cff', backgroundColor: '#b98cff',
+          borderWidth: 2.5, tension: 0.2, pointRadius: 4, order: 0 },
+        { label: 'Receitas', data: pts.map((p) => Number(p.income)), backgroundColor: 'rgba(25,255,156,.75)', borderRadius: 4, order: 1 },
+        { label: 'Despesas', data: pts.map((p) => Number(p.expenses)), backgroundColor: 'rgba(255,77,109,.8)', borderRadius: 4, order: 1 },
+      ],
+    },
+    options: { ...repBase(),
+      scales: { x: { grid: { display: false }, ticks: { color: '#a1a1b0' } },
+        y: { grid: repGrid, ticks: { ...repTicks, callback: axisMoney } } } },
+  });
+}
+
+// Barras horizontais: nomes de categoria são longos e o objetivo é comparar os dois meses por categoria.
+function renderCats() {
+  const r = rep.data.cats;
+  const rows = r?.rows ?? [];
+  const rise = rows.filter((x) => Number(x.previous) > 0 && x.categoryId)
+    .map((x) => ({ x, d: Number(x.current) - Number(x.previous) })).sort((a, b) => b.d - a.d)[0];
+  const top = rise && rise.d > 0 ? `Maior alta: ${rise.x.name} (${signed(rise.d)} vs. mês anterior).`
+    : (rows.length ? 'Nenhuma categoria subiu em relação ao mês anterior.' : '');
+  if (!repPrep('rpCats', { ok: rows.length > 0, top, height: Math.max(240, rows.length * 46 + 70),
+    empty: r ? 'Sem despesas neste mês nem no anterior.' : 'Relatório indisponível no momento.' })) return;
+
+  rep.charts.rpCats = new Chart($('rpCatsCv'), {
+    type: 'bar',
+    data: {
+      labels: rows.map((x) => `${x.icon ? x.icon + ' ' : ''}${x.name}`),
+      datasets: [
+        { label: monthLabel(r.month), data: rows.map((x) => Number(x.current)), backgroundColor: 'rgba(255,77,109,.85)', borderRadius: 4 },
+        { label: monthLabel(r.previousMonth), data: rows.map((x) => Number(x.previous)), backgroundColor: 'rgba(143,143,160,.55)', borderRadius: 4 },
+      ],
+    },
+    options: { ...repBase(), indexAxis: 'y',
+      scales: { x: { beginAtZero: true, grid: repGrid, ticks: { ...repTicks, callback: axisMoney } },
+        y: { grid: { display: false }, ticks: { color: '#c9c9d3' } } } },
+  });
+}
+
+// Área empilhada: o saldo total é a soma de duas partes (contas + poupança) ao longo do tempo.
+function renderNet() {
+  const r = rep.data.net;
+  const pts = r?.points ?? [];
+  let top = '';
+  if (pts.length > 1) {
+    const first = pts[0], last = pts[pts.length - 1];
+    top = `Saldo de ${brl(last.total)}, ${signed(Number(last.total) - Number(first.total))} desde ${monthLabel(first.month)}.`;
+  }
+  if (!repPrep('rpNet', { ok: pts.some((p) => Number(p.total) !== 0), top,
+    empty: r ? 'Sem saldo para mostrar.' : 'Relatório indisponível no momento.' })) return;
+
+  rep.charts.rpNet = new Chart($('rpNetCv'), {
+    type: 'line',
+    data: {
+      labels: pts.map((p) => monthLabel(p.month)),
+      datasets: [
+        { label: 'Contas', data: pts.map((p) => Number(p.checking)), borderColor: '#00e5ff', backgroundColor: 'rgba(0,229,255,.22)',
+          fill: 'origin', tension: 0.25, borderWidth: 2, pointRadius: 2 },
+        { label: 'Poupança', data: pts.map((p) => Number(p.savings)), borderColor: '#b98cff', backgroundColor: 'rgba(185,140,255,.22)',
+          fill: '-1', tension: 0.25, borderWidth: 2, pointRadius: 2 },
+      ],
+    },
+    options: { ...repBase(),
+      plugins: { ...repBase().plugins, tooltip: { callbacks: {
+        label: (c) => ` ${c.dataset.label}: ${brl(c.raw)}`,
+        footer: (items) => `Total: ${brl(items.reduce((s, i) => s + i.raw, 0))}` } } },
+      scales: { x: { grid: { display: false }, ticks: { color: '#a1a1b0' } },
+        y: { stacked: true, grid: repGrid, ticks: { ...repTicks, callback: axisMoney } } } },
+  });
+}
+
+function renderReports() {
+  if (!rep.data || !repVisible()) return;   // canvas em aba oculta sai com tamanho errado: desenha só com a aba aberta
+  renderPace(); renderMonthly(); renderCats(); renderNet();
+}
+
+async function loadReports() {
+  const m = $('month').value;
+  if (!/^\d{4}-\d{2}$/.test(m)) return;
+  const seq = ++rep.seq;   // se o mês mudar no meio do caminho, a resposta antiga é descartada
+  const get = (path) => api(path).catch(() => null);   // cada gráfico falha sozinho
+  const [monthly, pace, cats, net] = await Promise.all([
+    get(`/reports/monthly?month=${m}&months=6`), get(`/reports/pace?month=${m}`),
+    get(`/reports/categories?month=${m}`), get(`/reports/net-worth?month=${m}&months=12`)]);
+  if (seq !== rep.seq) return;
+  rep.data = { monthly, pace, cats, net };
+  renderReports();
+}
+
+document.querySelector('[data-tab=rel]').addEventListener('click', loadReports);
+$('month').addEventListener('change', () => { if (repVisible()) loadReports(); });
+$('eyeBtn').addEventListener('click', renderReports);   // reaplica "ocultar valores" nos eixos
+// Ao sair da conta, apaga os dados na hora (outro usuário pode entrar no mesmo aparelho); ao entrar, recarrega.
+new MutationObserver(() => {
+  if ($('appView').classList.contains('hidden')) { rep.seq++; rep.data = null; repClear(); }
+  else if (repVisible()) loadReports();
+}).observe($('appView'), { attributes: true, attributeFilter: ['class'] });
 
 // ---------------------------------------------------------------- sair após ficar sem mexer
 const idle = { last: Date.now(), warn: false };

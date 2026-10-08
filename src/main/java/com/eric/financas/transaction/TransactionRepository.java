@@ -80,6 +80,19 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID>,
                                        @Param("periodStart") LocalDate periodStart,
                                        @Param("periodEnd") LocalDate periodEnd);
 
+    /** Uma linha por dia que teve lançamentos do tipo informado (alimenta o relatório por dia da semana). */
+    @Query("""
+            select t.occurredOn as occurredDay, sum(t.amount) as total, count(t) as entries
+            from Transaction t
+            where t.userId = :userId and t.type = :type and t.deletedAt is null
+              and t.occurredOn between :periodStart and :periodEnd
+            group by t.occurredOn
+            """)
+    List<DailyTotal> dailyTotals(@Param("userId") UUID userId,
+                                 @Param("type") TransactionType type,
+                                 @Param("periodStart") LocalDate periodStart,
+                                 @Param("periodEnd") LocalDate periodEnd);
+
     @Query("""
             select c.id as categoryId, c.name as categoryName, c.icon as icon, c.color as color,
                    sum(t.amount) as total
