@@ -895,6 +895,66 @@ $('idleStay').onclick = bump;
 $('idleSel').value = store.get('fin.idleMin', '5');
 $('idleSel').onchange = () => { store.set('fin.idleMin', $('idleSel').value); bump(); toast('Configuração salva'); };
 
+// ---------------------------------------------------------------- bloquear ao sair do app / em segundo plano / ao fechar
+// O relógio de inatividade acima só anda com o app aberto na tela (o celular congela os timers em segundo plano)
+// e, se o app é fechado, o cookie de sessão fazia ele reabrir já logado. Aqui o horário em que o app saiu de cena
+// fica gravado no aparelho; ao voltar (ou ao abrir de novo) compara com o tempo escolhido e encerra a sessão.
+const AWAY_NOTE = 'Você saiu do app. Entre de novo para continuar.';
+const loggedIn = () => !$('appView').classList.contains('hidden');
+const awaySec = () => Number(store.get('fin.awaySec', '60'));   // -1 = não bloquear ao sair
+const awayExceeded = (since) => awaySec() >= 0 && Date.now() - since >= awaySec() * 1000;
+// fin.seen = última vez em que o app estava em uso; fin.left = quando saiu de cena (0 = está em uso)
+let seenWrittenAt = 0;
+const markSeen = (force = false) => {
+  const n = Date.now();
+  if (force || n - seenWrittenAt > 5000) { seenWrittenAt = n; store.set('fin.seen', String(n)); }
+};
+
+document.head.insertAdjacentHTML('beforeend', '<style>.away #appView{filter:blur(18px)}</style>');   // esconde o conteúdo na tela de apps recentes
+
+function onLeave() {
+  if (!loggedIn()) return;
+  store.set('fin.left', String(Date.now()));
+  document.documentElement.classList.add('away');
+}
+function onReturn() {
+  document.documentElement.classList.remove('away');
+  const left = Number(store.get('fin.left', '0'));
+  store.set('fin.left', '0');
+  if (loggedIn() && left && awayExceeded(left)) return logout(AWAY_NOTE);
+  if (loggedIn()) markSeen(true);
+}
+document.addEventListener('visibilitychange', () => (document.hidden ? onLeave() : onReturn()));
+window.addEventListener('pagehide', onLeave);
+
+['pointerdown', 'keydown', 'touchstart', 'wheel', 'scroll'].forEach((ev) =>
+  window.addEventListener(ev, () => { if (loggedIn()) markSeen(); }, { passive: true, capture: true }));
+setInterval(() => { if (!document.hidden && loggedIn()) markSeen(); }, 15000);   // lendo sem tocar na tela também conta como "em uso"
+
+// Ao sair da conta, apaga as marcas (senão o próximo boot acharia que o app ficou fora de cena); ao entrar, marca uso.
+new MutationObserver(() => {
+  if (loggedIn()) markSeen(true);
+  else { store.set('fin.seen', '0'); store.set('fin.left', '0'); }
+}).observe($('appView'), { attributes: true, attributeFilter: ['class'] });
+
+// Chamada no boot, ANTES de renovar a sessão: o app foi fechado e demorou mais que o tempo escolhido?
+async function lockedWhileAway() {
+  const ref = Number(store.get('fin.left', '0')) || Number(store.get('fin.seen', '0'));
+  store.set('fin.left', '0');
+  if (!ref || !awayExceeded(ref)) return false;
+  await logout(AWAY_NOTE);
+  return true;
+}
+
+$('idleSel').closest('.card').insertAdjacentHTML('afterend', `
+  <div class="card space-y-3">
+    <h2 class="font-semibold">Bloquear ao sair do app</h2>
+    <p class="text-sm text-slate-400">Pede a digital de novo se você sair do app, trocar de aplicativo ou fechá-lo e demorar para voltar.</p>
+    <select id="awaySel" class="in"><option value="10">Quase na hora (10 segundos)</option><option value="60">Após 1 minuto</option><option value="300">Após 5 minutos</option><option value="900">Após 15 minutos</option><option value="-1">Não bloquear ao sair</option></select>
+  </div>`);
+$('awaySel').value = String(awaySec());
+$('awaySel').onchange = () => { store.set('fin.awaySec', $('awaySel').value); toast('Configuração salva'); };
+
 // ---------------------------------------------------------------- PWA
 let installEvent;
 window.addEventListener('beforeinstallprompt', (e) => {
@@ -911,5 +971,6 @@ if ('serviceWorker' in navigator) navigator.serviceWorker.register('/service-wor
   $('month').value = currentMonth();
   ['txDate', 'gDate', 'rDate'].forEach((id) => ($(id).value = iso()));
   $('stFrom').value = iso(new Date(new Date().getFullYear(), new Date().getMonth(), 1)); $('stTo').value = iso();
+  if (await lockedWhileAway()) return;   // fechou o app e demorou a voltar: não reaproveita a sessão
   (await refresh()) ? showApp() : showAuth();
 })();
