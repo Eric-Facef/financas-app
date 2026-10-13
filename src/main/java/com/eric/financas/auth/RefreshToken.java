@@ -20,6 +20,11 @@ import java.util.UUID;
 @NoArgsConstructor
 public class RefreshToken {
 
+    /** Sessão do site/PWA (padrão). */
+    public static final String CLIENT_WEB = "web";
+    /** Sessão do app do relógio. */
+    public static final String CLIENT_WATCH = "watch";
+
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
@@ -42,10 +47,19 @@ public class RefreshToken {
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
+    /** De onde veio a sessão (web ou watch). A rotação mantém o mesmo valor. */
+    @Column(nullable = false, length = 20)
+    private String client = CLIENT_WEB;
+
     public RefreshToken(UUID userId, String tokenHash, Instant expiresAt) {
+        this(userId, tokenHash, expiresAt, CLIENT_WEB);
+    }
+
+    public RefreshToken(UUID userId, String tokenHash, Instant expiresAt, String client) {
         this.userId = userId;
         this.tokenHash = tokenHash;
         this.expiresAt = expiresAt;
+        this.client = client;
     }
 
     public boolean isRevoked() {

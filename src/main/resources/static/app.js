@@ -955,6 +955,44 @@ $('idleSel').closest('.card').insertAdjacentHTML('afterend', `
 $('awaySel').value = String(awaySec());
 $('awaySel').onchange = () => { store.set('fin.awaySec', $('awaySel').value); toast('Configuração salva'); };
 
+// ---------------------------------------------------------------- relógio: ver se está logado e deslogar só ele
+// A sessão do app do relógio é marcada no servidor (header X-Client: watch no login dele). Aqui só mostramos o estado
+// e chamamos DELETE /watch, que apaga as sessões do relógio sem mexer nas do celular e do navegador.
+$('t-seg').insertAdjacentHTML('beforeend', `
+  <div class="card space-y-3">
+    <h2 class="font-semibold">Relógio</h2>
+    <p class="text-sm text-slate-400">Encerra só a sessão do app do relógio. Este aparelho e o navegador continuam logados. O relógio percebe em até 15 minutos e volta para a tela de login.</p>
+    <p id="watchState" class="text-sm text-slate-300">Verificando…</p>
+    <button id="watchOut" class="btn disabled:opacity-40" disabled>Deslogar relógio</button>
+  </div>`);
+
+const agoText = (v) => {
+  const m = Math.max(0, Math.round((Date.now() - new Date(v).getTime()) / 60000));
+  if (m < 1) return 'agora há pouco';
+  if (m < 60) return `há ${m} min`;
+  const h = Math.round(m / 60);
+  return h < 24 ? `há ${h} h` : `há ${Math.round(h / 24)} dia(s)`;
+};
+
+async function loadWatch() {
+  try {
+    const s = await api('/watch');
+    $('watchState').textContent = s.connected
+      ? `Relógio conectado · última atividade ${s.lastActivity ? agoText(s.lastActivity) : 'agora há pouco'}`
+      : 'Nenhum relógio logado.';
+    $('watchOut').disabled = !s.connected;
+  } catch (err) {
+    $('watchState').textContent = 'Não foi possível verificar o relógio agora.';
+  }
+}
+
+$('watchOut').onclick = async () => {
+  if (!confirm('Deslogar o relógio? Ele vai pedir e-mail e senha de novo.')) return;
+  try { await api('/watch', { method: 'DELETE' }); toast('Relógio deslogado'); await loadWatch(); }
+  catch (err) { toast(err.message, true); }
+};
+document.querySelector('[data-tab=seg]').addEventListener('click', loadWatch);
+
 // ---------------------------------------------------------------- PWA
 let installEvent;
 window.addEventListener('beforeinstallprompt', (e) => {

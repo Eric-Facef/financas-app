@@ -58,11 +58,17 @@ public class AuthService {
         onboarding.createDefaults(user.getId());
 
         audit.record(user.getId(), AuditAction.REGISTRO, "User", user.getId().toString(), Map.of("email", email));
-        return tokensFor(user);
+        return tokensFor(user, RefreshToken.CLIENT_WEB);
+    }
+
+    /** Login do site (sessão "web"). */
+    public AuthTokens login(LoginRequest req) {
+        return login(req, RefreshToken.CLIENT_WEB);
     }
 
     // Sem @Transactional de propósito: a falha de login precisa ser auditada imediatamente.
-    public AuthTokens login(LoginRequest req) {
+    /** @param client "web" ou "watch": marca a sessão para que ela possa ser encerrada separadamente. */
+    public AuthTokens login(LoginRequest req, String client) {
         String email = normalize(req.email());
         User user = users.findByEmail(email).orElse(null);
 
@@ -75,8 +81,9 @@ public class AuthService {
             throw new UnauthorizedException("Credenciais inválidas");
         }
 
-        audit.record(user.getId(), AuditAction.LOGIN_SUCESSO, "User", user.getId().toString(), Map.of());
-        return tokensFor(user);
+        audit.record(user.getId(), AuditAction.LOGIN_SUCESSO, "User", user.getId().toString(),
+                RefreshToken.CLIENT_WATCH.equals(client) ? Map.of("aparelho", "relogio") : Map.of());
+        return tokensFor(user, client);
     }
 
     /** Login por digital: a assinatura é validada no PasskeyService; aqui só emitimos os tokens. */
@@ -84,7 +91,7 @@ public class AuthService {
         User user = passkeys.finishLogin(req);
         audit.record(user.getId(), AuditAction.LOGIN_SUCESSO, "User", user.getId().toString(),
                 Map.of("metodo", "passkey"));
-        return tokensFor(user);
+        return tokensFor(user, RefreshToken.CLIENT_WEB);
     }
 
     public AuthTokens refresh(String rawRefreshToken) {
@@ -105,10 +112,10 @@ public class AuthService {
         }
     }
 
-    private AuthTokens tokensFor(User user) {
+    private AuthTokens tokensFor(User user, String client) {
         return new AuthTokens(
                 jwt.generateAccessToken(user.getId(), user.getEmail()),
-                refreshTokens.issue(user.getId()),
+                refreshTokens.issue(user.getId(), client),
                 user.getEmail());
     }
 

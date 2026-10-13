@@ -21,6 +21,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.annotation.CookieValue;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -45,9 +46,16 @@ public class AuthController {
         return respond(HttpStatus.CREATED, authService.register(request));
     }
 
+    /**
+     * O app do relógio manda o header "X-Client: watch" para a sessão dele ser identificável
+     * (e poder ser encerrada pelo botão "Deslogar relógio" do site). Qualquer outro valor vira "web".
+     */
     @PostMapping("/login")
-    public ResponseEntity<TokenResponse> login(@Valid @RequestBody LoginRequest request) {
-        return respond(HttpStatus.OK, authService.login(request));
+    public ResponseEntity<TokenResponse> login(@Valid @RequestBody LoginRequest request,
+                                               @RequestHeader(name = "X-Client", required = false) String client) {
+        String kind = RefreshToken.CLIENT_WATCH.equalsIgnoreCase(client == null ? "" : client.trim())
+                ? RefreshToken.CLIENT_WATCH : RefreshToken.CLIENT_WEB;
+        return respond(HttpStatus.OK, authService.login(request, kind));
     }
 
     /** Passo 1 do login por digital: gera o desafio que o celular vai assinar. */

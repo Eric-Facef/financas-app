@@ -14,10 +14,12 @@ import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.HexFormat;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
  * Refresh tokens opacos, com hash no banco, rotação a cada uso e detecção de reuso.
+ * Cada token carrega o "client" (web ou watch) para permitir encerrar só as sessões do relógio.
  */
 @Slf4j
 @Service
@@ -32,19 +34,28 @@ public class RefreshTokenService {
     public record Rotation(UUID userId, String newToken) {
     }
 
-    /** Emite um novo refresh token e devolve o valor bruto (única vez em que ele existe). */
+    /** Estado da sessão de um tipo de aparelho: se há sessão ativa e quando ela foi usada pela última vez. */
+    public record ClientStatus(boolean connected, Instant lastActivity) {
+    }
+
+    /** Emite um refresh token para o site e devolve o valor bruto (única vez em que ele existe). */
     @Transactional
     public String issue(UUID userId) {
+        return issue(userId, RefreshToken.CLIENT_WEB);
+    }
+
+    @Transactional
+    public String issue(UUID userId, String client) {
         byte[] bytes = new byte[32];
         RANDOM.nextBytes(bytes);
         String raw = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
 
-        repository.save(new RefreshToken(userId, hash(raw), Instant.now().plus(props.refreshTokenTtl())));
+        repository.save(new RefreshToken(userId, hash(raw), Instant.now().plus(props.refreshTokenTtl()), client));
         return raw;
     }
 
     /**
-     * Valida o token, revoga e emite outro. Se um token JÁ revogado for reapresentado
+     * Valida o token, revoga e emite outro (do mesmo client). Se um token JÁ revogado for reapresentado
      * (possível roubo), todas as sessões do usuário são encerradas.
      * noRollbackFor: a revogação em massa precisa persistir mesmo lançando a exceção.
      */
@@ -63,7 +74,7 @@ public class RefreshTokenService {
         }
 
         current.setRevokedAt(Instant.now());
-        return new Rotation(current.getUserId(), issue(current.getUserId()));
+        return new Rotation(current.getUserId(), issue(current.getUserId(), current.getClient()));
     }
 
     @Transactional
@@ -73,6 +84,20 @@ public class RefreshTokenService {
                 t.setRevokedAt(Instant.now());
             }
         });
+    }
+
+    /** Encerra todas as sessões de um tipo de aparelho (ex.: o relógio). Devolve quantas linhas foram removidas. */
+    @Transactional
+    public int revokeClient(UUID userId, String client) {
+        return repository.deleteByUserIdAndClient(userId, client);
+    }
+
+    @Transactional(readOnly = true)
+    public ClientStatus statusOf(UUID userId, String client) {
+        Optional<RefreshToken> active = repository
+                .findFirstByUserIdAndClientAndRevokedAtIsNullAndExpiresAtAfterOrderByCreatedAtDesc(
+                        userId, client, Instant.now());
+        return new ClientStatus(active.isPresent(), active.map(RefreshToken::getCreatedAt).orElse(null));
     }
 
     @Transactional
