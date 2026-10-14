@@ -3,8 +3,10 @@ package com.eric.financas.auth;
 import com.eric.financas.audit.AuditAction;
 import com.eric.financas.audit.AuditService;
 import com.eric.financas.auth.dto.AuthTokens;
+import com.eric.financas.auth.dto.ChangePasswordRequest;
 import com.eric.financas.auth.dto.LoginRequest;
 import com.eric.financas.auth.dto.RegisterRequest;
+import com.eric.financas.common.exception.BusinessException;
 import com.eric.financas.common.exception.ConflictException;
 import com.eric.financas.common.exception.UnauthorizedException;
 import com.eric.financas.common.security.JwtService;
@@ -19,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Locale;
 import java.util.Map;
+import java.util.UUID;
 
 @Service
 public class AuthService {
@@ -104,6 +107,30 @@ public class AuthService {
 
         return new AuthTokens(jwt.generateAccessToken(user.getId(), user.getEmail()),
                 rotation.newToken(), user.getEmail());
+    }
+
+    /**
+     * Troca a senha de quem já está logado. Exige a senha atual, encerra as sessões de todos os aparelhos
+     * (inclusive o relógio) e devolve uma sessão nova para o aparelho que trocou, que continua logado.
+     * Sem @Transactional no método, de propósito: a tentativa com senha atual errada precisa ser auditada na hora.
+     */
+    public AuthTokens changePassword(UUID userId, ChangePasswordRequest req) {
+        User user = users.findById(userId).orElseThrow(() -> new UnauthorizedException("Sessão inválida"));
+
+        if (!encoder.matches(req.currentPassword(), user.getPasswordHash())) {
+            audit.record(userId, AuditAction.SENHA_TROCA_FALHA, "User", userId.toString(), Map.of());
+            throw new BusinessException("Senha atual incorreta");
+        }
+        if (encoder.matches(req.newPassword(), user.getPasswordHash())) {
+            throw new BusinessException("A nova senha deve ser diferente da atual");
+        }
+
+        user.changePasswordHash(encoder.encode(req.newPassword()));
+        users.save(user);
+
+        String refresh = refreshTokens.replaceAllSessions(userId, RefreshToken.CLIENT_WEB);
+        audit.record(userId, AuditAction.SENHA_ALTERADA, "User", userId.toString(), Map.of());
+        return new AuthTokens(jwt.generateAccessToken(user.getId(), user.getEmail()), refresh, user.getEmail());
     }
 
     public void logout(String rawRefreshToken) {

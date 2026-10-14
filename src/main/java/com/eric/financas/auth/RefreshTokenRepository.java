@@ -25,6 +25,11 @@ public interface RefreshTokenRepository extends JpaRepository<RefreshToken, UUID
     @Query("delete from RefreshToken r where r.userId = :userId and r.client = :client")
     int deleteByUserIdAndClient(@Param("userId") UUID userId, @Param("client") String client);
 
+    /** Apaga todas as sessões do usuário (usado na troca de senha). Apagar, e não revogar, pelo mesmo motivo acima. */
+    @Modifying
+    @Query("delete from RefreshToken r where r.userId = :userId")
+    int deleteAllByUserId(@Param("userId") UUID userId);
+
     /** A sessão ativa mais recente do tipo de aparelho (cada renovação cria uma nova, então a data = última atividade). */
     Optional<RefreshToken> findFirstByUserIdAndClientAndRevokedAtIsNullAndExpiresAtAfterOrderByCreatedAtDesc(
             UUID userId, String client, Instant now);

@@ -1,10 +1,13 @@
 package com.eric.financas.auth;
 
 import com.eric.financas.auth.dto.AuthTokens;
+import com.eric.financas.auth.dto.ChangePasswordRequest;
 import com.eric.financas.auth.dto.LoginRequest;
 import com.eric.financas.auth.dto.RegisterRequest;
 import com.eric.financas.auth.dto.TokenResponse;
 import com.eric.financas.common.config.AppProperties;
+import com.eric.financas.common.exception.UnauthorizedException;
+import com.eric.financas.common.security.AuthenticatedUser;
 import com.eric.financas.common.security.JwtService;
 import com.eric.financas.passkey.PasskeyService;
 import com.eric.financas.passkey.dto.PasskeyLoginRequest;
@@ -18,6 +21,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.CookieValue;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -78,6 +82,21 @@ public class AuthController {
             HttpServletRequest request) {
         assertTrustedOrigin(request);
         return respond(HttpStatus.OK, authService.refresh(refreshToken));
+    }
+
+    /**
+     * Troca de senha. Mora em /auth porque devolve um cookie de sessão novo (o cookie só vale neste caminho),
+     * mas, ao contrário do resto de /auth, exige login: a regra está na SecurityConfig.
+     */
+    @PostMapping("/password")
+    public ResponseEntity<TokenResponse> changePassword(@AuthenticationPrincipal AuthenticatedUser user,
+                                                        @Valid @RequestBody ChangePasswordRequest request,
+                                                        HttpServletRequest http) {
+        assertTrustedOrigin(http);
+        if (user == null) {
+            throw new UnauthorizedException("Sessão inválida");
+        }
+        return respond(HttpStatus.OK, authService.changePassword(user.id(), request));
     }
 
     @PostMapping("/logout")

@@ -993,6 +993,38 @@ $('watchOut').onclick = async () => {
 };
 document.querySelector('[data-tab=seg]').addEventListener('click', loadWatch);
 
+// ---------------------------------------------------------------- trocar senha
+// POST /auth/password: confere a senha atual, encerra as sessões de TODOS os aparelhos (inclusive o relógio) e devolve
+// uma sessão nova (cookie + token) para este aparelho, que segue logado.
+$('t-seg').insertAdjacentHTML('beforeend', `
+  <form id="pwForm" class="card space-y-3" autocomplete="off">
+    <h2 class="font-semibold">Trocar senha</h2>
+    <p class="text-sm text-slate-400">Ao trocar, o relógio e os outros aparelhos saem da conta e precisam entrar de novo com a senha nova. Este aparelho continua logado.</p>
+    <div><label class="lbl" for="pwOld">Senha atual</label><input id="pwOld" type="password" autocomplete="current-password" required maxlength="72" class="in"></div>
+    <div><label class="lbl" for="pwNew">Nova senha (mínimo 8 caracteres)</label><input id="pwNew" type="password" autocomplete="new-password" required minlength="8" maxlength="72" class="in"></div>
+    <div><label class="lbl" for="pwNew2">Repita a nova senha</label><input id="pwNew2" type="password" autocomplete="new-password" required minlength="8" maxlength="72" class="in"></div>
+    <button class="btn" id="pwSubmit">Trocar senha</button>
+  </form>`);
+
+let pwBusy = false;
+$('pwForm').onsubmit = async (e) => {
+  e.preventDefault();
+  if (pwBusy) return;
+  const oldPw = $('pwOld').value, newPw = $('pwNew').value;
+  if (newPw !== $('pwNew2').value) return toast('A confirmação não confere com a nova senha', true);
+  if (newPw === oldPw) return toast('A nova senha deve ser diferente da atual', true);
+  pwBusy = true; $('pwSubmit').disabled = true;
+  try {
+    // o token de acesso dura 15 min; renova antes para não falhar por expiração
+    if (!(await refresh())) return toast('Sessão expirada. Entre de novo.', true);
+    const data = await api('/auth/password', { method: 'POST', body: { currentPassword: oldPw, newPassword: newPw } });
+    state.token = data.accessToken;
+    $('pwForm').reset();
+    toast('Senha alterada. Os outros aparelhos saíram da conta.');
+  } catch (err) { toast(err.message, true); }
+  finally { pwBusy = false; $('pwSubmit').disabled = false; }
+};
+
 // ---------------------------------------------------------------- PWA
 let installEvent;
 window.addEventListener('beforeinstallprompt', (e) => {

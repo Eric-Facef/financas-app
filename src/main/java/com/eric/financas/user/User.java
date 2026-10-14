@@ -37,4 +37,9 @@ public class User {
         this.email = email;
         this.passwordHash = passwordHash;
     }
+
+    /** Troca o hash da senha (quem chama já validou a senha atual). */
+    public void changePasswordHash(String newHash) {
+        this.passwordHash = newHash;
+    }
 }

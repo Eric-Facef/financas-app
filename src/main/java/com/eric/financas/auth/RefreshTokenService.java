@@ -92,6 +92,16 @@ public class RefreshTokenService {
         return repository.deleteByUserIdAndClient(userId, client);
     }
 
+    /**
+     * Troca de senha: encerra TODAS as sessões do usuário (relógio, outros aparelhos) e abre uma nova só para quem
+     * trocou a senha, tudo na mesma transação. Devolve o valor bruto do novo refresh token.
+     */
+    @Transactional
+    public String replaceAllSessions(UUID userId, String client) {
+        repository.deleteAllByUserId(userId);
+        return issue(userId, client);
+    }
+
     @Transactional(readOnly = true)
     public ClientStatus statusOf(UUID userId, String client) {
         Optional<RefreshToken> active = repository
