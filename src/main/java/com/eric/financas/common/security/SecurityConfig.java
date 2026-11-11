@@ -47,7 +47,7 @@ public class SecurityConfig {
                         .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                         // GET e HEAD: monitores de uptime costumam usar HEAD
                         .requestMatchers(HttpMethod.GET, "/", "/index.html", "/app.js", "/service-worker.js",
-                                "/manifest.webmanifest", "/favicon.ico", "/icons/**").permitAll()
+                                "/manifest.webmanifest", "/stmt-pdf.js", "/favicon.ico", "/icons/**").permitAll()
                         .requestMatchers(HttpMethod.HEAD, "/", "/index.html").permitAll()
                         .anyRequest().authenticated())
                 .exceptionHandling(e -> e.authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
