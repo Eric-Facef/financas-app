@@ -143,6 +143,7 @@
         <div class="flex gap-2">
           <button id="stCsv" class="chip">Baixar CSV</button>
           <button id="stPrint" class="chip">Imprimir / PDF</button>
+          <button id="stPdf" class="chip">Baixar PDF</button>
         </div>
       </div>
       <article id="stmtDoc" class="stmt card"></article>
@@ -276,5 +277,8 @@
   <div id="idleWarn" class="hidden idle-warn" role="alert"><span id="idleMsg"></span><button id="idleStay" class="chip on">Continuar</button></div>
   <div id="toast" class="hidden fixed bottom-4 left-1/2 -translate-x-1/2 px-4 py-2 rounded-lg text-sm shadow-lg"></div>
   <script src="/app.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
+  <script src="/stmt-pdf.js"></script>
 </body>
 </html>
